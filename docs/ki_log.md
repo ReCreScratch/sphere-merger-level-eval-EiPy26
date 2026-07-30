@@ -23,3 +23,9 @@ abgewichen.
   gleiche Mittelpunkte) war eine feste x-Achsen-Fallback-Richtung; auf Wunsch
   angepasst auf Relativgeschwindigkeitsrichtung, x-Achse nur als letzter Fallback
   wenn auch die Geschwindigkeiten identisch sind.
+- `boundary.py` (Boden+Wände einheitlich als Box, elastisch/einstellbar) und
+  `engine.py` (`PhysicsConfig`, `step`) generiert. Zweiter deal-Stolperstein:
+  `deal.pre`-Validator bekommt nur tatsächlich übergebene Argumente, nicht die
+  per Funktions-Default aufgefüllten — Test mit weggelassenem `config`-Argument
+  schlug mit `TypeError` (nicht der erwarteten `PreContractError`) fehl. Fix:
+  Default auch in der Validator-Lambda spiegeln (`config=None`).
