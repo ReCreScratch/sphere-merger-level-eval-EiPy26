@@ -47,3 +47,15 @@ abgewichen.
   Mittelpunkt leicht angehoben, zweimal Größe nachjustiert. Gutes Beispiel
   für rein geschmacklich/iterativ getriebene Anpassungen ohne "richtige"
   Antwort.
+- UI-Steuerung (Reset/Random-Buttons, Klick-Drag-Schuss) ergänzt. Dabei
+  `game/shooting.py::shoot(sphere, angle_degrees, speed)` extrahiert statt
+  die Velocity-Berechnung direkt im Renderer zu bauen -- auf Wunsch, damit
+  dieselbe Funktion später headless von Agenten (Winkelsweep) genutzt werden
+  kann, ohne Maus. Nach visueller Prüfung mehrfach nachgebessert: Schusslinie
+  zeigte zunächst die Zugrichtung statt der (gespiegelten) Schussrichtung;
+  Feldränder waren durch nicht-zentriertes Seitenverhältnis ungleichmäßig
+  sichtbar (Viewport-Klasse mit zentrierenden Rändern behebt das); Zuglinie
+  zeigte zunächst nur die Zuglänge statt der tatsächlich simulierten
+  Flugweite (inkl. Reibung) -- jetzt eine isolierte Vorschau-Simulation
+  über die echte `step()`-Funktion statt einer separaten Formel, um nicht
+  aus der Physik-Engine zu laufen. Reibungs-Default halbiert (0.1 -> 0.05).

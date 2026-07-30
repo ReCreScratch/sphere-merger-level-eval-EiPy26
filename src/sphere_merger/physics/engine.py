@@ -40,7 +40,7 @@ class PhysicsConfig:
     """
 
     gravity: float = 9.81
-    friction: float = 0.1
+    friction: float = 0.05
     sphere_restitution: float = 0.9
     boundary_restitution: float = 0.6
     rest_threshold_factor: float = 1.0
