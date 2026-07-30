@@ -4,13 +4,18 @@ Click-drag to aim/shoot the next queued sphere; wait for the field to
 settle before the next drag is accepted. Reset restarts the same level.
 """
 
-from sphere_merger.game.level import generate_random_level
+from sphere_merger.game.level import generate_random_level, radius_for_level
 from sphere_merger.physics.boundary import Boundary
 from sphere_merger.physics.vector import Vector3
 from sphere_merger.rendering.renderer import run_round
 
 FIELD = Boundary(x_min=-8.0, x_max=8.0, y_min=-8.0, y_max=8.0, z_min=0.0)
-SPAWN = Vector3(0.0, 7.0, 3.0)
+# Bottom-left corner, at rest height -- shots go straight in along the
+# ground instead of dropping in from above.
+SPAWN_MARGIN = 1.0
+SPAWN = Vector3(
+    FIELD.x_min + SPAWN_MARGIN, FIELD.y_min + SPAWN_MARGIN, FIELD.z_min + radius_for_level(0)
+)
 
 LEVEL = generate_random_level(
     seed=42,

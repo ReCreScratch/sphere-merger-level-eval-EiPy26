@@ -11,10 +11,10 @@ import pygame
 
 from sphere_merger.game.level import LevelDefinition, radius_for_level
 from sphere_merger.game.round import (
-    DT,
     RoundState,
     advance_physics,
     is_settled,
+    settle,
     spawn_shot,
     start_round,
 )
@@ -49,6 +49,12 @@ FIELD_OUTLINE_COLOR = (110, 110, 130)
 HUD_TEXT_COLOR = (230, 230, 230)
 WIN_COLOR = (90, 200, 120)
 LOSE_COLOR = (220, 80, 80)
+NEXT_BALL_OUTLINE_COLOR = (255, 215, 0)
+SLIDER_TRACK_COLOR = (70, 70, 90)
+SLIDER_HANDLE_COLOR = (220, 220, 235)
+FIELD_MARGIN_PX = 40
+MIN_AIM_LINE_PX = 48.0
+MAX_AIM_LINE_PX = 320.0
 
 
 @dataclass
@@ -58,9 +64,9 @@ class RenderConfig:
     window_size: tuple[int, int] = (800, 600)
     background_color: tuple[int, int, int] = (30, 30, 40)
     show_level_labels: bool = True
-    shot_strength: float = 3.0
+    shot_strength: float = 15.0
     min_shot_speed: float = 1.0
-    max_shot_speed: float = 15.0
+    max_shot_speed: float = 45.0
     random_sphere_count: int = 5
 
 
@@ -203,6 +209,35 @@ def draw_button(
     screen.blit(text, text.get_rect(center=rect.center))
 
 
+@dataclass
+class Slider:
+    """A draggable horizontal value picker, e.g. for a live-adjustable
+    physics parameter."""
+
+    rect: pygame.Rect
+    min_value: float
+    max_value: float
+    value: float
+
+    def value_at(self, screen_x: int) -> float:
+        """The value corresponding to a given screen x position, clamped to
+        `[min_value, max_value]`."""
+        t = (screen_x - self.rect.x) / self.rect.width
+        t = min(max(t, 0.0), 1.0)
+        return self.min_value + t * (self.max_value - self.min_value)
+
+    def handle_x(self) -> int:
+        t = (self.value - self.min_value) / (self.max_value - self.min_value)
+        return int(self.rect.x + t * self.rect.width)
+
+
+def draw_slider(screen: pygame.Surface, font: pygame.font.Font, slider: Slider, label: str) -> None:
+    label_text = font.render(f"{label}: {slider.value:.2f}", True, HUD_TEXT_COLOR)
+    screen.blit(label_text, (slider.rect.x, slider.rect.y - 20))
+    pygame.draw.rect(screen, SLIDER_TRACK_COLOR, slider.rect, border_radius=4)
+    pygame.draw.circle(screen, SLIDER_HANDLE_COLOR, (slider.handle_x(), slider.rect.centery), 8)
+
+
 def draw_sphere(
     screen: pygame.Surface,
     font: pygame.font.Font,
@@ -339,12 +374,24 @@ def run(
 
 
 def _draw_round_hud(
-    screen: pygame.Surface, font: pygame.font.Font, big_font: pygame.font.Font, state: RoundState
+    screen: pygame.Surface,
+    font: pygame.font.Font,
+    big_font: pygame.font.Font,
+    state: RoundState,
+    fps: float,
 ) -> None:
+    fps_text = font.render(f"{fps:.0f} FPS", True, HUD_TEXT_COLOR)
+    screen.blit(fps_text, (screen.get_width() - fps_text.get_width() - 10, 10))
+
     score_text = font.render(
         f"Score: {state.score} / {state.level.target_score}", True, HUD_TEXT_COLOR
     )
-    screen.blit(score_text, (10, screen.get_height() - 60))
+    screen.blit(score_text, (10, screen.get_height() - 86))
+
+    remaining_text = font.render(
+        f"Kugeln uebrig: {len(state.remaining_queue)}", True, HUD_TEXT_COLOR
+    )
+    screen.blit(remaining_text, (10, screen.get_height() - 60))
 
     next_level = state.remaining_queue[0] if state.remaining_queue else None
     next_text = font.render(
@@ -360,16 +407,44 @@ def _draw_round_hud(
         screen.blit(banner, banner.get_rect(center=(screen.get_width() // 2, 40)))
 
 
-def run_round(level: LevelDefinition, render_config: RenderConfig | None = None) -> RoundState:
+def _next_ball_preview(level: LevelDefinition, state: RoundState) -> Sphere | None:
+    """The next queued sphere, sitting at the spawn point, or `None` if the
+    queue is empty. Used both to show it "on deck" and to aim the shot."""
+    if not state.remaining_queue:
+        return None
+    next_level = state.remaining_queue[0]
+    return Sphere(
+        level.spawn_position,
+        Vector3(0.0, 0.0, 0.0),
+        radius=radius_for_level(next_level),
+        level=next_level,
+    )
+
+
+def run_round(
+    level: LevelDefinition, render_config: RenderConfig | None = None, dt: float = 1 / 60
+) -> RoundState:
     """Open a window and let the player shoot through one round of `level`.
 
     Click-drag anywhere to aim and shoot the next queued sphere -- same
     gesture as `run`'s exploration mode, but here each shot is the real
     game: physics runs (merging and scoring) until the field settles or the
     round is won before another shot is accepted, and the round ends when
-    the target score is reached or the queue runs out. Reset restarts the
-    same `level` from scratch. Returns the final `RoundState` once the
-    window is closed.
+    the target score is reached or the queue runs out. Right-click while
+    aiming cancels the shot. Reset restarts the same `level` from scratch.
+    A slider lets friction be adjusted live, taking effect on the very next
+    physics step (mutates `level.physics_config.friction` in place).
+    Returns the final `RoundState` once the window is closed.
+
+    Aim power is tracked via relative mouse movement (the cursor is hidden
+    and recentered every frame while aiming) rather than absolute distance
+    from the click point -- with the latter, drag distance (and thus power)
+    would be silently capped in whichever directions point toward a nearby
+    screen edge, since the OS cursor can't move past it.
+
+    `dt` is the simulated time advanced per rendered frame; it defaults to
+    `1/60` (matching the `clock.tick(60)` frame cap below) so the round
+    plays out in real time instead of in slow motion.
     """
     if render_config is None:
         render_config = RenderConfig()
@@ -380,13 +455,34 @@ def run_round(level: LevelDefinition, render_config: RenderConfig | None = None)
     font = pygame.font.Font(None, 24)
     big_font = pygame.font.Font(None, 56)
     clock = pygame.time.Clock()
-    viewport = compute_viewport(level.boundary, render_config.window_size)
+    play_area = (
+        render_config.window_size[0] - 2 * FIELD_MARGIN_PX,
+        render_config.window_size[1] - 2 * FIELD_MARGIN_PX,
+    )
+    viewport = compute_viewport(
+        level.boundary, play_area, area_offset=(FIELD_MARGIN_PX, FIELD_MARGIN_PX)
+    )
     field_outline = field_rect(level.boundary, viewport)
 
     state = start_round(level)
     combo_index = 0
     reset_button = pygame.Rect(10, 10, 90, 32)
-    aim_start: tuple[int, int] | None = None
+    friction_slider = Slider(
+        pygame.Rect(120, 16, 200, 8),
+        min_value=0.0,
+        max_value=1.0,
+        value=level.physics_config.friction,
+    )
+    screen_center = (render_config.window_size[0] // 2, render_config.window_size[1] // 2)
+    aiming = False
+    # Accumulated mouse movement (screen px) since aiming started, tracked
+    # via relative motion rather than absolute position -- see the
+    # recentering below. Using the absolute distance to the click point
+    # instead would silently cap the reachable drag distance (and thus
+    # shot power) in whichever directions point toward a nearby screen
+    # edge, since the OS cursor can't move past it.
+    drag_vector = [0.0, 0.0]
+    dragging_slider = False
 
     running = True
     while running:
@@ -398,57 +494,86 @@ def run_round(level: LevelDefinition, render_config: RenderConfig | None = None)
                 if reset_button.collidepoint(event.pos):
                     state = start_round(level)
                     combo_index = 0
+                elif friction_slider.rect.inflate(0, 16).collidepoint(event.pos):
+                    dragging_slider = True
+                    friction_slider.value = friction_slider.value_at(event.pos[0])
+                    level.physics_config.friction = friction_slider.value
                 elif not state.is_over and state.remaining_queue and is_settled(state.spheres):
-                    aim_start = event.pos
-            elif event.type == pygame.MOUSEBUTTONUP and event.button == 1 and aim_start is not None:
-                shot_dx = (aim_start[0] - mouse_pos[0]) / viewport.scale
-                shot_dy = -(aim_start[1] - mouse_pos[1]) / viewport.scale
-                drag_length = math.hypot(shot_dx, shot_dy)
-                if drag_length > 1e-6:
-                    angle_degrees = math.degrees(math.atan2(shot_dy, shot_dx))
-                    speed = drag_length * render_config.shot_strength
-                    speed = min(
-                        max(speed, render_config.min_shot_speed), render_config.max_shot_speed
-                    )
-                    spawn_shot(state, angle_degrees, speed)
-                    combo_index = 0
-                aim_start = None
+                    aiming = True
+                    drag_vector = [0.0, 0.0]
+                    pygame.mouse.set_visible(False)
+                    pygame.mouse.set_pos(screen_center)
+                    pygame.mouse.get_rel()  # discard the jump caused by set_pos above
+            elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 3 and aiming:
+                aiming = False
+                pygame.mouse.set_visible(True)
+            elif event.type == pygame.MOUSEMOTION and dragging_slider:
+                friction_slider.value = friction_slider.value_at(event.pos[0])
+                level.physics_config.friction = friction_slider.value
+            elif event.type == pygame.MOUSEBUTTONUP and event.button == 1:
+                dragging_slider = False
+                if aiming:
+                    aiming = False
+                    pygame.mouse.set_visible(True)
+                    shot_dx = -drag_vector[0] / viewport.scale
+                    shot_dy = drag_vector[1] / viewport.scale
+                    drag_length = math.hypot(shot_dx, shot_dy)
+                    if drag_length > 1e-6:
+                        angle_degrees = math.degrees(math.atan2(shot_dy, shot_dx))
+                        speed = drag_length * render_config.shot_strength
+                        speed = min(
+                            max(speed, render_config.min_shot_speed), render_config.max_shot_speed
+                        )
+                        spawn_shot(state, angle_degrees, speed)
+                        combo_index = 0
 
-        if aim_start is None and not is_settled(state.spheres):
-            combo_index, _ = advance_physics(state, combo_index)
+        if aiming:
+            rel_x, rel_y = pygame.mouse.get_rel()
+            drag_vector[0] += rel_x
+            drag_vector[1] += rel_y
+            pygame.mouse.set_pos(screen_center)
+            pygame.mouse.get_rel()  # discard the jump caused by set_pos above
+
+        if not aiming:
+            if not is_settled(state.spheres):
+                combo_index, _ = advance_physics(state, combo_index, dt=dt)
+            else:
+                settle(state.spheres)
 
         screen.fill(render_config.background_color)
         pygame.draw.rect(screen, FIELD_OUTLINE_COLOR, field_outline, 2)
         for sphere in state.spheres:
             draw_sphere(screen, font, sphere, level.boundary, viewport, render_config)
 
-        if aim_start is not None and state.remaining_queue:
-            shot_dx = (aim_start[0] - mouse_pos[0]) / viewport.scale
-            shot_dy = -(aim_start[1] - mouse_pos[1]) / viewport.scale
+        preview_sphere = _next_ball_preview(level, state)
+        if preview_sphere is not None and not state.is_over:
+            draw_sphere(screen, font, preview_sphere, level.boundary, viewport, render_config)
+            preview_center = _sphere_screen_center(preview_sphere, level.boundary, viewport)
+            preview_radius_px = max(int(preview_sphere.radius * viewport.scale), 2)
+            pygame.draw.circle(
+                screen, NEXT_BALL_OUTLINE_COLOR, preview_center, preview_radius_px, 3
+            )
+
+        if aiming and preview_sphere is not None:
+            shot_dx = -drag_vector[0] / viewport.scale
+            shot_dy = drag_vector[1] / viewport.scale
             drag_length = math.hypot(shot_dx, shot_dy)
             if drag_length > 1e-6:
                 angle_degrees = math.degrees(math.atan2(shot_dy, shot_dx))
                 speed = drag_length * render_config.shot_strength
                 speed = min(max(speed, render_config.min_shot_speed), render_config.max_shot_speed)
-                next_level = state.remaining_queue[0]
-                preview_sphere = Sphere(
-                    level.spawn_position,
-                    Vector3(0.0, 0.0, 0.0),
-                    radius=radius_for_level(next_level),
-                    level=next_level,
-                )
-                field_width = level.boundary.x_max - level.boundary.x_min
-                predicted_distance = _predicted_flight_distance(
-                    preview_sphere,
-                    angle_degrees,
-                    speed,
-                    level.boundary,
-                    level.physics_config,
-                    DT,
-                    max_distance=field_width * 3,
+                # Line length shows power (speed), not predicted landing
+                # distance: the latter is heavily distorted by nearby walls
+                # (spawn sits in a corner), making the indicator misleading
+                # -- short in some directions purely because of a wall, not
+                # because of low power.
+                speed_range = render_config.max_shot_speed - render_config.min_shot_speed
+                speed_fraction = (speed - render_config.min_shot_speed) / speed_range
+                speed_fraction = min(max(speed_fraction, 0.0), 1.0)
+                line_length_px = MIN_AIM_LINE_PX + speed_fraction * (
+                    MAX_AIM_LINE_PX - MIN_AIM_LINE_PX
                 )
                 start_center = _sphere_screen_center(preview_sphere, level.boundary, viewport)
-                line_length_px = predicted_distance * viewport.scale
                 direction_x, direction_y = shot_dx / drag_length, shot_dy / drag_length
                 arrow_tip = (
                     start_center[0] + direction_x * line_length_px,
@@ -459,10 +584,12 @@ def run_round(level: LevelDefinition, render_config: RenderConfig | None = None)
                 screen.blit(angle_text, (arrow_tip[0] + 10, arrow_tip[1] - 10))
 
         draw_button(screen, font, reset_button, "Reset", reset_button.collidepoint(mouse_pos))
-        _draw_round_hud(screen, font, big_font, state)
+        draw_slider(screen, font, friction_slider, "Reibung")
+        _draw_round_hud(screen, font, big_font, state, clock.get_fps())
 
         pygame.display.flip()
         clock.tick(60)
 
+    pygame.mouse.set_visible(True)
     pygame.quit()
     return state
