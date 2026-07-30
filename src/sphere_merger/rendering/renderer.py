@@ -9,6 +9,15 @@ from dataclasses import dataclass
 
 import pygame
 
+from sphere_merger.game.level import LevelDefinition, radius_for_level
+from sphere_merger.game.round import (
+    DT,
+    RoundState,
+    advance_physics,
+    is_settled,
+    spawn_shot,
+    start_round,
+)
 from sphere_merger.game.shooting import shoot
 from sphere_merger.physics.boundary import Boundary
 from sphere_merger.physics.engine import PhysicsConfig, step
@@ -37,6 +46,9 @@ BUTTON_HOVER_COLOR = (90, 90, 120)
 BUTTON_TEXT_COLOR = (230, 230, 230)
 DRAG_LINE_COLOR = (250, 250, 250)
 FIELD_OUTLINE_COLOR = (110, 110, 130)
+HUD_TEXT_COLOR = (230, 230, 230)
+WIN_COLOR = (90, 200, 120)
+LOSE_COLOR = (220, 80, 80)
 
 
 @dataclass
@@ -324,3 +336,133 @@ def run(
         clock.tick(60)
 
     pygame.quit()
+
+
+def _draw_round_hud(
+    screen: pygame.Surface, font: pygame.font.Font, big_font: pygame.font.Font, state: RoundState
+) -> None:
+    score_text = font.render(
+        f"Score: {state.score} / {state.level.target_score}", True, HUD_TEXT_COLOR
+    )
+    screen.blit(score_text, (10, screen.get_height() - 60))
+
+    next_level = state.remaining_queue[0] if state.remaining_queue else None
+    next_text = font.render(
+        f"Naechste Kugel: Level {next_level}" if next_level is not None else "Keine Kugeln mehr",
+        True,
+        HUD_TEXT_COLOR,
+    )
+    screen.blit(next_text, (10, screen.get_height() - 34))
+
+    if state.is_over:
+        message, color = ("GEWONNEN", WIN_COLOR) if state.is_won else ("VERLOREN", LOSE_COLOR)
+        banner = big_font.render(message, True, color)
+        screen.blit(banner, banner.get_rect(center=(screen.get_width() // 2, 40)))
+
+
+def run_round(level: LevelDefinition, render_config: RenderConfig | None = None) -> RoundState:
+    """Open a window and let the player shoot through one round of `level`.
+
+    Click-drag anywhere to aim and shoot the next queued sphere -- same
+    gesture as `run`'s exploration mode, but here each shot is the real
+    game: physics runs (merging and scoring) until the field settles or the
+    round is won before another shot is accepted, and the round ends when
+    the target score is reached or the queue runs out. Reset restarts the
+    same `level` from scratch. Returns the final `RoundState` once the
+    window is closed.
+    """
+    if render_config is None:
+        render_config = RenderConfig()
+
+    pygame.init()
+    screen = pygame.display.set_mode(render_config.window_size)
+    pygame.display.set_caption("Sphere Merger")
+    font = pygame.font.Font(None, 24)
+    big_font = pygame.font.Font(None, 56)
+    clock = pygame.time.Clock()
+    viewport = compute_viewport(level.boundary, render_config.window_size)
+    field_outline = field_rect(level.boundary, viewport)
+
+    state = start_round(level)
+    combo_index = 0
+    reset_button = pygame.Rect(10, 10, 90, 32)
+    aim_start: tuple[int, int] | None = None
+
+    running = True
+    while running:
+        mouse_pos = pygame.mouse.get_pos()
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                running = False
+            elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                if reset_button.collidepoint(event.pos):
+                    state = start_round(level)
+                    combo_index = 0
+                elif not state.is_over and state.remaining_queue and is_settled(state.spheres):
+                    aim_start = event.pos
+            elif event.type == pygame.MOUSEBUTTONUP and event.button == 1 and aim_start is not None:
+                shot_dx = (aim_start[0] - mouse_pos[0]) / viewport.scale
+                shot_dy = -(aim_start[1] - mouse_pos[1]) / viewport.scale
+                drag_length = math.hypot(shot_dx, shot_dy)
+                if drag_length > 1e-6:
+                    angle_degrees = math.degrees(math.atan2(shot_dy, shot_dx))
+                    speed = drag_length * render_config.shot_strength
+                    speed = min(
+                        max(speed, render_config.min_shot_speed), render_config.max_shot_speed
+                    )
+                    spawn_shot(state, angle_degrees, speed)
+                    combo_index = 0
+                aim_start = None
+
+        if aim_start is None and not is_settled(state.spheres):
+            combo_index, _ = advance_physics(state, combo_index)
+
+        screen.fill(render_config.background_color)
+        pygame.draw.rect(screen, FIELD_OUTLINE_COLOR, field_outline, 2)
+        for sphere in state.spheres:
+            draw_sphere(screen, font, sphere, level.boundary, viewport, render_config)
+
+        if aim_start is not None and state.remaining_queue:
+            shot_dx = (aim_start[0] - mouse_pos[0]) / viewport.scale
+            shot_dy = -(aim_start[1] - mouse_pos[1]) / viewport.scale
+            drag_length = math.hypot(shot_dx, shot_dy)
+            if drag_length > 1e-6:
+                angle_degrees = math.degrees(math.atan2(shot_dy, shot_dx))
+                speed = drag_length * render_config.shot_strength
+                speed = min(max(speed, render_config.min_shot_speed), render_config.max_shot_speed)
+                next_level = state.remaining_queue[0]
+                preview_sphere = Sphere(
+                    level.spawn_position,
+                    Vector3(0.0, 0.0, 0.0),
+                    radius=radius_for_level(next_level),
+                    level=next_level,
+                )
+                field_width = level.boundary.x_max - level.boundary.x_min
+                predicted_distance = _predicted_flight_distance(
+                    preview_sphere,
+                    angle_degrees,
+                    speed,
+                    level.boundary,
+                    level.physics_config,
+                    DT,
+                    max_distance=field_width * 3,
+                )
+                start_center = _sphere_screen_center(preview_sphere, level.boundary, viewport)
+                line_length_px = predicted_distance * viewport.scale
+                direction_x, direction_y = shot_dx / drag_length, shot_dy / drag_length
+                arrow_tip = (
+                    start_center[0] + direction_x * line_length_px,
+                    start_center[1] - direction_y * line_length_px,
+                )
+                pygame.draw.line(screen, DRAG_LINE_COLOR, start_center, arrow_tip, 2)
+                angle_text = font.render(f"{angle_degrees % 360:.0f} deg", True, DRAG_LINE_COLOR)
+                screen.blit(angle_text, (arrow_tip[0] + 10, arrow_tip[1] - 10))
+
+        draw_button(screen, font, reset_button, "Reset", reset_button.collidepoint(mouse_pos))
+        _draw_round_hud(screen, font, big_font, state)
+
+        pygame.display.flip()
+        clock.tick(60)
+
+    pygame.quit()
+    return state

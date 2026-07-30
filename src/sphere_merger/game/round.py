@@ -69,30 +69,25 @@ def _same_level(a: Sphere, b: Sphere) -> bool:
     return a.level == b.level
 
 
-def play_shot(
-    state: RoundState,
-    angle_degrees: float,
-    speed: float,
-    score_fn: MergeScoreFn = default_merge_score,
-    dt: float = DT,
-    max_settle_steps: int = MAX_SETTLE_STEPS,
-    settle_speed_threshold: float = SETTLE_SPEED_THRESHOLD,
-) -> list[int]:
-    """Shoot the next queued sphere and simulate until the field settles.
+def is_settled(
+    spheres: list[Sphere], settle_speed_threshold: float = SETTLE_SPEED_THRESHOLD
+) -> bool:
+    """Whether every sphere's speed is below `settle_speed_threshold`.
 
-    Mutates `state` in place: pops the next level off `remaining_queue`,
-    spawns it at `state.level.spawn_position` and shoots it (see
-    `game.shooting.shoot`), then repeatedly advances physics -- with
-    same-level pairs excluded from the bounce solver, see
-    `physics.engine.step`'s `collision_filter` -- and resolves merges
-    (`game.merge.resolve_merges`) until every sphere's speed drops below
-    `settle_speed_threshold`, the round is won, or `max_settle_steps` is
-    reached. Each merge adds `score_fn(new_level, combo_index)` to
-    `state.score`, `combo_index` counting merges within this shot (1-based,
-    first merge first).
+    Matches test_stress.py's REST_TOLERANCE: stacked contacts settle into a
+    small bounded jitter rather than exactly zero (see docs/ki_log.md), so
+    this allows for that instead of requiring exact zero.
+    """
+    return all(sphere.velocity.length() < settle_speed_threshold for sphere in spheres)
 
-    Returns the resulting level of each merge caused by this shot, in the
-    order they happened.
+
+def spawn_shot(state: RoundState, angle_degrees: float, speed: float) -> None:
+    """Pop the next queued level, spawn it at the spawn position and shoot it.
+
+    Mutates `state` in place: appends the new sphere to `state.spheres` and
+    increments `state.shots_taken`. Does not advance physics -- call
+    `advance_physics` (once per frame for live rendering, or in a loop via
+    `play_shot` headless) to actually move/merge it.
 
     Raises:
         RuntimeError: if the round is already won or lost.
@@ -111,24 +106,76 @@ def play_shot(
     state.spheres.append(sphere)
     state.shots_taken += 1
 
+
+def advance_physics(
+    state: RoundState,
+    combo_index: int,
+    score_fn: MergeScoreFn = default_merge_score,
+    dt: float = DT,
+) -> tuple[int, list[int]]:
+    """Advance `state.spheres` by one physics step and resolve any merges.
+
+    Same-level pairs are excluded from the physics bounce solver (see
+    `physics.engine.step`'s `collision_filter`) so `game.merge.resolve_merges`
+    can turn them into a merge instead. Each merge adds
+    `score_fn(new_level, combo_index)` to `state.score`, `combo_index`
+    counting merges since the current shot was spawned (1-based, so pass 0
+    for the first call after `spawn_shot` and reuse the returned value for
+    subsequent calls within the same shot).
+
+    Returns the updated `combo_index` and the resulting level of each merge
+    caused by this step, in the order they happened.
+    """
+    step(
+        state.spheres,
+        dt,
+        state.level.boundary,
+        state.level.physics_config,
+        collision_filter=lambda a, b: not _same_level(a, b),
+    )
+    merged_levels: list[int] = []
+    for new_level in resolve_merges(state.spheres):
+        combo_index += 1
+        state.score += score_fn(new_level, combo_index)
+        merged_levels.append(new_level)
+    return combo_index, merged_levels
+
+
+def play_shot(
+    state: RoundState,
+    angle_degrees: float,
+    speed: float,
+    score_fn: MergeScoreFn = default_merge_score,
+    dt: float = DT,
+    max_settle_steps: int = MAX_SETTLE_STEPS,
+    settle_speed_threshold: float = SETTLE_SPEED_THRESHOLD,
+) -> list[int]:
+    """Shoot the next queued sphere and simulate until the field settles.
+
+    Headless composition of `spawn_shot` + repeated `advance_physics`, for
+    agents/tests that don't need to see it animate frame by frame (for
+    that, see `rendering.renderer.run_round`, which drives the same two
+    functions itself). Runs until every sphere's speed drops below
+    `settle_speed_threshold`, the round is won, or `max_settle_steps` is
+    reached.
+
+    Returns the resulting level of each merge caused by this shot, in the
+    order they happened.
+
+    Raises:
+        RuntimeError: if the round is already won or lost.
+    """
+    spawn_shot(state, angle_degrees, speed)
+
     combo_index = 0
     merged_levels: list[int] = []
     for _ in range(max_settle_steps):
-        step(
-            state.spheres,
-            dt,
-            state.level.boundary,
-            state.level.physics_config,
-            collision_filter=lambda a, b: not _same_level(a, b),
-        )
-        for new_level in resolve_merges(state.spheres):
-            combo_index += 1
-            state.score += score_fn(new_level, combo_index)
-            merged_levels.append(new_level)
+        combo_index, new_levels = advance_physics(state, combo_index, score_fn, dt)
+        merged_levels.extend(new_levels)
 
         if state.is_won:
             break
-        if all(s.velocity.length() < settle_speed_threshold for s in state.spheres):
+        if is_settled(state.spheres, settle_speed_threshold):
             break
 
     return merged_levels
