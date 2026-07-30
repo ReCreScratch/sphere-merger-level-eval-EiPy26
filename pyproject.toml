@@ -1,0 +1,45 @@
+[project]
+name = "sphere-merger"
+version = "0.1.0"
+description = "Level Evaluation - Sphere Merger"
+requires-python = ">=3.11"
+dependencies = [
+    "pygame",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "hypothesis",
+    "mypy",
+    "ruff",
+    "interrogate",
+    "deal",
+]
+
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.mypy]
+mypy_path = "src"
+packages = ["sphere_merger"]
+strict = false
+
+[tool.pytest.ini_options]
+addopts = "--doctest-modules"
+testpaths = ["src", "tests"]
+
+[tool.interrogate]
+fail-under = 20
+paths = ["src"]
