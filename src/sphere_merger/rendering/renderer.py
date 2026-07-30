@@ -54,44 +54,46 @@ class RenderConfig:
 
 @dataclass(frozen=True)
 class Viewport:
-    """World-to-screen mapping: uniform scale plus centering margins.
+    """World-to-screen mapping for one drawable area (a window, or one cell
+    of a grid): uniform scale plus the screen position of the world origin.
 
-    Using one scale for both axes (instead of independently stretching x and
-    y to fill the window) keeps circles circular; the margins then center
-    the field so all four walls get an equal, visible border instead of one
-    wall sitting flush against a window edge.
+    A single `scale` for both axes (instead of independently stretching x
+    and y to fill the area) keeps circles circular; `origin_x`/
+    `origin_y_bottom` already include the centering margin, so all four
+    field walls get an equal, visible border instead of one sitting flush
+    against the area's edge.
     """
 
     scale: float
-    margin_x: float
-    margin_y: float
+    origin_x: float
+    origin_y_bottom: float
 
 
-def _compute_viewport(boundary: Boundary, window_size: tuple[int, int]) -> Viewport:
+def compute_viewport(
+    boundary: Boundary, area_size: tuple[float, float], area_offset: tuple[float, float] = (0, 0)
+) -> Viewport:
+    """Viewport that fits `boundary` centered inside `area_size`, offset by
+    `area_offset` (the area's top-left corner, in screen pixels)."""
     world_width = boundary.x_max - boundary.x_min
     world_height = boundary.y_max - boundary.y_min
-    scale = min(window_size[0] / world_width, window_size[1] / world_height)
-    margin_x = (window_size[0] - world_width * scale) / 2
-    margin_y = (window_size[1] - world_height * scale) / 2
-    return Viewport(scale, margin_x, margin_y)
+    scale = min(area_size[0] / world_width, area_size[1] / world_height)
+    margin_x = (area_size[0] - world_width * scale) / 2
+    margin_y = (area_size[1] - world_height * scale) / 2
+    return Viewport(scale, area_offset[0] + margin_x, area_offset[1] + area_size[1] - margin_y)
 
 
-def _world_to_screen(
-    x: float, y: float, boundary: Boundary, window_size: tuple[int, int], viewport: Viewport
-) -> tuple[int, int]:
-    screen_x = viewport.margin_x + (x - boundary.x_min) * viewport.scale
-    screen_y = window_size[1] - viewport.margin_y - (y - boundary.y_min) * viewport.scale
+def _world_to_screen(x: float, y: float, boundary: Boundary, viewport: Viewport) -> tuple[int, int]:
+    screen_x = viewport.origin_x + (x - boundary.x_min) * viewport.scale
+    screen_y = viewport.origin_y_bottom - (y - boundary.y_min) * viewport.scale
     return int(screen_x), int(screen_y)
 
 
-def _field_rect(
-    boundary: Boundary, window_size: tuple[int, int], viewport: Viewport
-) -> pygame.Rect:
+def field_rect(boundary: Boundary, viewport: Viewport) -> pygame.Rect:
     world_width = boundary.x_max - boundary.x_min
     world_height = boundary.y_max - boundary.y_min
     return pygame.Rect(
-        int(viewport.margin_x),
-        int(viewport.margin_y),
+        int(viewport.origin_x),
+        int(viewport.origin_y_bottom - world_height * viewport.scale),
         int(world_width * viewport.scale),
         int(world_height * viewport.scale),
     )
@@ -115,24 +117,18 @@ def shadow_radius_px(radius_px: int, height_above_ground: float) -> int:
 
 
 def _sphere_screen_center(
-    sphere: Sphere, boundary: Boundary, window_size: tuple[int, int], viewport: Viewport
+    sphere: Sphere, boundary: Boundary, viewport: Viewport
 ) -> tuple[int, int]:
-    ground_x, ground_y = _world_to_screen(
-        sphere.position.x, sphere.position.y, boundary, window_size, viewport
-    )
+    ground_x, ground_y = _world_to_screen(sphere.position.x, sphere.position.y, boundary, viewport)
     return ground_x, ground_y - int(sphere.position.z * viewport.scale)
 
 
 def _sphere_at_screen_pos(
-    spheres: list[Sphere],
-    pos: tuple[int, int],
-    boundary: Boundary,
-    window_size: tuple[int, int],
-    viewport: Viewport,
+    spheres: list[Sphere], pos: tuple[int, int], boundary: Boundary, viewport: Viewport
 ) -> Sphere | None:
     """Topmost sphere whose drawn circle contains `pos`, if any."""
     for sphere in reversed(spheres):
-        center_x, center_y = _sphere_screen_center(sphere, boundary, window_size, viewport)
+        center_x, center_y = _sphere_screen_center(sphere, boundary, viewport)
         radius_px = max(int(sphere.radius * viewport.scale), 2)
         dx, dy = pos[0] - center_x, pos[1] - center_y
         if dx * dx + dy * dy <= radius_px * radius_px:
@@ -187,7 +183,7 @@ def _predicted_flight_distance(
     return min(distance, max_distance)
 
 
-def _draw_button(
+def draw_button(
     screen: pygame.Surface, font: pygame.font.Font, rect: pygame.Rect, label: str, hovered: bool
 ) -> None:
     pygame.draw.rect(screen, BUTTON_HOVER_COLOR if hovered else BUTTON_COLOR, rect, border_radius=6)
@@ -195,18 +191,15 @@ def _draw_button(
     screen.blit(text, text.get_rect(center=rect.center))
 
 
-def _draw_sphere(
+def draw_sphere(
     screen: pygame.Surface,
     font: pygame.font.Font,
     sphere: Sphere,
     boundary: Boundary,
-    window_size: tuple[int, int],
     viewport: Viewport,
     config: RenderConfig,
 ) -> None:
-    ground_x, ground_y = _world_to_screen(
-        sphere.position.x, sphere.position.y, boundary, window_size, viewport
-    )
+    ground_x, ground_y = _world_to_screen(sphere.position.x, sphere.position.y, boundary, viewport)
     radius_px = max(int(sphere.radius * viewport.scale), 2)
     height_above_ground = sphere.position.z - boundary.z_min
     shadow_r = shadow_radius_px(radius_px, height_above_ground)
@@ -248,8 +241,8 @@ def run(
     pygame.display.set_caption("Sphere Merger")
     font = pygame.font.Font(None, 24)
     clock = pygame.time.Clock()
-    viewport = _compute_viewport(boundary, render_config.window_size)
-    field_rect = _field_rect(boundary, render_config.window_size, viewport)
+    viewport = compute_viewport(boundary, render_config.window_size)
+    field_outline = field_rect(boundary, viewport)
 
     initial_spheres = copy.deepcopy(spheres)
     reset_button = pygame.Rect(10, 10, 90, 32)
@@ -270,9 +263,7 @@ def run(
                     spheres[:] = _random_scenario(boundary, render_config.random_sphere_count)
                     initial_spheres = copy.deepcopy(spheres)
                 else:
-                    drag_sphere = _sphere_at_screen_pos(
-                        spheres, event.pos, boundary, render_config.window_size, viewport
-                    )
+                    drag_sphere = _sphere_at_screen_pos(spheres, event.pos, boundary, viewport)
                     drag_start = event.pos
             elif (
                 event.type == pygame.MOUSEBUTTONUP and event.button == 1 and drag_sphere is not None
@@ -293,16 +284,12 @@ def run(
             step(spheres, dt, boundary, effective_physics_config)
 
         screen.fill(render_config.background_color)
-        pygame.draw.rect(screen, FIELD_OUTLINE_COLOR, field_rect, 2)
+        pygame.draw.rect(screen, FIELD_OUTLINE_COLOR, field_outline, 2)
         for sphere in spheres:
-            _draw_sphere(
-                screen, font, sphere, boundary, render_config.window_size, viewport, render_config
-            )
+            draw_sphere(screen, font, sphere, boundary, viewport, render_config)
 
         if drag_sphere is not None:
-            start_center = _sphere_screen_center(
-                drag_sphere, boundary, render_config.window_size, viewport
-            )
+            start_center = _sphere_screen_center(drag_sphere, boundary, viewport)
             shot_dx = (drag_start[0] - mouse_pos[0]) / viewport.scale
             shot_dy = -(drag_start[1] - mouse_pos[1]) / viewport.scale
             drag_length = math.hypot(shot_dx, shot_dy)
@@ -330,8 +317,8 @@ def run(
                 angle_text = font.render(f"{angle_degrees % 360:.0f} deg", True, DRAG_LINE_COLOR)
                 screen.blit(angle_text, (arrow_tip[0] + 10, arrow_tip[1] - 10))
 
-        _draw_button(screen, font, reset_button, "Reset", reset_button.collidepoint(mouse_pos))
-        _draw_button(screen, font, random_button, "Random", random_button.collidepoint(mouse_pos))
+        draw_button(screen, font, reset_button, "Reset", reset_button.collidepoint(mouse_pos))
+        draw_button(screen, font, random_button, "Random", random_button.collidepoint(mouse_pos))
 
         pygame.display.flip()
         clock.tick(60)

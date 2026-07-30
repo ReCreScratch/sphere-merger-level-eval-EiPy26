@@ -59,3 +59,15 @@ abgewichen.
   Flugweite (inkl. Reibung) -- jetzt eine isolierte Vorschau-Simulation
   über die echte `step()`-Funktion statt einer separaten Formel, um nicht
   aus der Physik-Engine zu laufen. Reibungs-Default halbiert (0.1 -> 0.05).
+- `rendering/grid_view.py::run_angle_sweep()` ergänzt: viele unabhängige
+  Kopien eines Szenarios gleichzeitig, je mit anderem Startwinkel (Winkel-
+  sweep, wie im Projektplan für Agenten vorgesehen) -- Machbarkeits-/
+  Performance-Check vor echtem Agenten-Batch-Testing. `Viewport` dafür von
+  `window_size`+Margins auf `origin_x`/`origin_y_bottom` umgebaut, damit
+  dieselbe Zeichenlogik sowohl ein Vollbild als auch einzelne Gitterzellen
+  bedienen kann, ohne Code zu duplizieren. Gitter-/Kraft-/Reibungswerte über
+  mehrere Runden nach visueller Prüfung angepasst (Verrechnungen bei der
+  Zellenzahl, Felder zu klein, Bewegung kaum sichtbar) -- typisches
+  Trial-and-Error bei rein visuellen Parametern, siehe Verlauf im Chat.
+  Vollbildmodus ergänzt (Auflösung automatisch vom Betriebssystem), Esc zum
+  Beenden, da im Vollbild kein Fenster-X existiert.
