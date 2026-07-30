@@ -109,6 +109,8 @@ abgewichen.
   (`OVERLAP_EPSILON=1e-9`, sehr eng) tatsächlich verletzte -- via Hypothesis
   gefunden. Sauberer Fix: `_raw_normal` (exakt, für `resolve_overlap`) von
   `contact_normal` (gekippt, nur für `_resolve_velocity`) getrennt.
+  Ausführliche Fallstudie (für den Bericht, DbC-Abschnitt) in
+  `docs/highlights.md`.
 - Zweite Nutzer-Beobachtung: der ursprüngliche Hypothesis-Settle-Test gab
   JEDER Kugel eine unabhängige Zufallsgeschwindigkeit -- deutlich mehr
   Energie als das echte Spiel je einbringt (nur ein Schuss, Rest ruht).
