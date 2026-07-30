@@ -35,8 +35,17 @@ def distance(a: Sphere, b: Sphere) -> float:
 
 
 def is_colliding(a: Sphere, b: Sphere) -> bool:
-    """Whether two spheres overlap."""
-    return distance(a, b) < a.radius + b.radius
+    """Whether two spheres overlap.
+
+    Compares squared distances (no `Vector3`/sqrt) since this runs in the
+    O(n^2) broad-phase scan over every sphere pair each step -- see
+    scripts/stress_benchmark.py, where this was the dominant cost.
+    """
+    dx = a.position.x - b.position.x
+    dy = a.position.y - b.position.y
+    dz = a.position.z - b.position.z
+    radius_sum = a.radius + b.radius
+    return dx * dx + dy * dy + dz * dz < radius_sum * radius_sum
 
 
 def find_colliding_pairs(spheres: list[Sphere]) -> list[tuple[int, int]]:

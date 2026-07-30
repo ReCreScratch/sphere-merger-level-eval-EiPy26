@@ -119,3 +119,12 @@ abgewichen.
   realistischer als auch praktisch testbar (vorher: Hypothesis brauchte
   wiederholt >5 Minuten zum Shrinken degenerierter Vielkugel-Fälle, die im
   echten Spiel nie vorkommen würden).
+- Performance-Optimierung (vor Spatial-Grid-Entscheidung): `is_colliding`
+  umgebaut auf quadrierten Distanzvergleich ohne `Vector3`-Allokation/sqrt
+  (Profiling hatte das als Hauptkosten identifiziert). Ergebnis: 30 Kugeln
+  von ~76 auf ~188 Schritte/Sekunde (2.7x), komfortabel über dem
+  60fps-Ziel. Skalierungstest (10/20/30 Kugeln) + erneutes Profiling zeigen:
+  der O(n²)-Scan bleibt Flaschenhals (44-64% der Zeit, wachsend mit n), ein
+  Spatial Grid würde bei dieser Kugelanzahl aber nur noch ~1.5-2x zusätzlich
+  bringen (Amdahl: der O(n)-Anteil bleibt unverändert) -- Entscheidung über
+  Spatial Grid vorerst zurückgestellt.
