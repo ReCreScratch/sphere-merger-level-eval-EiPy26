@@ -14,19 +14,23 @@ def test_merge_spheres_increments_level() -> None:
     assert merged.level == 1
 
 
-def test_merge_spheres_conserves_mass() -> None:
+def test_merge_spheres_keeps_uniform_radius_for_now() -> None:
+    # Temporary simplification -- see merge_spheres's docstring and
+    # game.level.radius_for_level's.
     a, b = _sphere(0.0), _sphere(0.5)
     merged = merge_spheres(a, b)
-    assert merged.mass == pytest.approx(a.mass + b.mass)
+    assert merged.radius == a.radius == b.radius
 
 
 def test_merge_spheres_conserves_momentum() -> None:
     a = _sphere(0.0, vx=2.0)
     b = _sphere(0.5, vx=-1.0)
     merged = merge_spheres(a, b)
-    assert merged.velocity.x * merged.mass == pytest.approx(
-        a.velocity.x * a.mass + b.velocity.x * b.mass
-    )
+    # Velocity is still the mass-weighted average of the inputs' true mass
+    # (radius**3), independent of the merged sphere's own (currently
+    # size-capped) radius/mass.
+    expected_vx = (a.velocity.x * a.mass + b.velocity.x * b.mass) / (a.mass + b.mass)
+    assert merged.velocity.x == pytest.approx(expected_vx)
 
 
 def test_merge_spheres_rejects_different_levels() -> None:

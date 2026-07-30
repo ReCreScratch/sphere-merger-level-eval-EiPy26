@@ -69,10 +69,22 @@ def test_generate_random_level_places_spheres_inside_boundary() -> None:
         assert sphere.position.y + sphere.radius <= FIELD.y_max
 
 
-def test_radius_for_level_doubles_mass_per_level() -> None:
-    r0 = radius_for_level(0)
-    r1 = radius_for_level(1)
-    assert r1**3 == pytest.approx(2 * r0**3)
+def test_generate_random_level_places_spheres_without_overlap() -> None:
+    level = generate_random_level(
+        7, FIELD, SPAWN, target_score=50, initial_sphere_count=10, shot_count=3
+    )
+
+    spheres = level.initial_spheres
+    for i in range(len(spheres)):
+        for j in range(i + 1, len(spheres)):
+            a, b = spheres[i], spheres[j]
+            dist = (a.position - b.position).length()
+            assert dist >= a.radius + b.radius - 1e-9
+
+
+def test_radius_for_level_is_currently_uniform_across_levels() -> None:
+    # Temporary simplification -- see radius_for_level's docstring.
+    assert radius_for_level(0) == radius_for_level(1) == radius_for_level(3)
 
 
 @pytest.mark.parametrize(

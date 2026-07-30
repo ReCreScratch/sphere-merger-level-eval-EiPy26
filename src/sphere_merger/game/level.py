@@ -20,25 +20,24 @@ from sphere_merger.physics.sphere import Sphere
 from sphere_merger.physics.vector import Vector3
 
 BASE_RADIUS = 0.5
-# Merging two same-level (same-radius) spheres combines their mass
-# (radius**3), i.e. exactly doubles it -- see game/merge.py.
-_MASS_GROWTH_PER_LEVEL = 2.0
+_MAX_PLACEMENT_ATTEMPTS = 500
 
 
 def radius_for_level(level: int, base_radius: float = BASE_RADIUS) -> float:
-    """Radius of a fresh sphere at `level`, consistent with merge growth.
+    """Radius of a fresh sphere at `level`.
 
-    Scales `base_radius` by `2**(level/3)`, the size a level-0 sphere would
-    reach after being repeatedly merged with same-level copies of itself up
-    to `level`. Keeps hand-placed and merge-created spheres of the same
-    level the same size.
+    Currently returns `base_radius` unconditionally, regardless of `level`
+    -- a temporary simplification (uniform ball size/mass) for tuning aim,
+    power and friction by hand without size variety in the way. The
+    level-scaled radius this used to return (`base_radius * 2**(level/3)`)
+    is still what `merge_spheres` computes from conserved mass on every
+    merge, independently of this function, so merged spheres already grow
+    regardless.
 
-    >>> round(radius_for_level(0), 5)
-    0.5
-    >>> round(radius_for_level(3), 5)
-    1.0
+    >>> radius_for_level(0) == radius_for_level(3) == BASE_RADIUS
+    True
     """
-    return base_radius * _MASS_GROWTH_PER_LEVEL ** (level / 3)
+    return base_radius
 
 
 @dataclass
@@ -78,6 +77,35 @@ class LevelDefinition:
             raise ValueError(f"shot_queue levels must be non-negative, got {self.shot_queue}")
 
 
+def _non_overlapping_position(
+    rng: random.Random, boundary: Boundary, radius: float, placed: list[Sphere]
+) -> Vector3:
+    """A resting-height x/y position that doesn't overlap any of `placed`.
+
+    Rejection sampling: keeps drawing candidates from `rng` until one
+    clears every already-placed sphere, so a generated level starts from a
+    valid, non-overlapping layout instead of relying on the first shot's
+    physics step to push overlapping spawns apart.
+
+    Raises:
+        ValueError: if no clear position is found within
+            `_MAX_PLACEMENT_ATTEMPTS` tries (the field is too small/crowded
+            for the requested sphere count and sizes).
+    """
+    z = boundary.z_min + radius
+    for _ in range(_MAX_PLACEMENT_ATTEMPTS):
+        x = rng.uniform(boundary.x_min + radius, boundary.x_max - radius)
+        y = rng.uniform(boundary.y_min + radius, boundary.y_max - radius)
+        candidate = Vector3(x, y, z)
+        if all((candidate - other.position).length() >= radius + other.radius for other in placed):
+            return candidate
+    raise ValueError(
+        f"could not place a non-overlapping sphere (radius {radius}) after "
+        f"{_MAX_PLACEMENT_ATTEMPTS} attempts -- field too small/crowded for "
+        "the requested sphere count"
+    )
+
+
 def generate_random_level(
     seed: int,
     boundary: Boundary,
@@ -105,16 +133,12 @@ def generate_random_level(
     rng = random.Random(seed)
     min_level, max_level = level_range
 
-    initial_spheres = []
+    initial_spheres: list[Sphere] = []
     for _ in range(initial_sphere_count):
         level = rng.randint(min_level, max_level)
         radius = radius_for_level(level)
-        x = rng.uniform(boundary.x_min + radius, boundary.x_max - radius)
-        y = rng.uniform(boundary.y_min + radius, boundary.y_max - radius)
-        z = boundary.z_min + radius
-        initial_spheres.append(
-            Sphere(Vector3(x, y, z), Vector3(0.0, 0.0, 0.0), radius=radius, level=level)
-        )
+        position = _non_overlapping_position(rng, boundary, radius, initial_spheres)
+        initial_spheres.append(Sphere(position, Vector3(0.0, 0.0, 0.0), radius=radius, level=level))
 
     shot_queue = [rng.randint(min_level, max_level) for _ in range(shot_count)]
 

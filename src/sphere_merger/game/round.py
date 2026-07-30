@@ -81,6 +81,20 @@ def is_settled(
     return all(sphere.velocity.length() < settle_speed_threshold for sphere in spheres)
 
 
+def settle(spheres: list[Sphere]) -> None:
+    """Force every sphere's velocity to exactly zero, in place.
+
+    `is_settled` only checks for a small residual jitter (see its
+    docstring), so spheres that stopped being advanced once they crossed
+    that threshold can still be carrying a tiny non-zero velocity. Left
+    alone, that residual gets picked back up (and visibly resumes moving)
+    once the next shot restarts physics stepping. Call this once a shot is
+    considered over so the next one starts from a genuinely resting field.
+    """
+    for sphere in spheres:
+        sphere.velocity = Vector3(0.0, 0.0, 0.0)
+
+
 def spawn_shot(state: RoundState, angle_degrees: float, speed: float) -> None:
     """Pop the next queued level, spawn it at the spawn position and shoot it.
 
@@ -156,8 +170,9 @@ def play_shot(
     agents/tests that don't need to see it animate frame by frame (for
     that, see `rendering.renderer.run_round`, which drives the same two
     functions itself). Runs until every sphere's speed drops below
-    `settle_speed_threshold`, the round is won, or `max_settle_steps` is
-    reached.
+    `settle_speed_threshold` (at which point `settle` zeroes out the small
+    residual jitter, so the next shot starts from a genuinely resting
+    field), the round is won, or `max_settle_steps` is reached.
 
     Returns the resulting level of each merge caused by this shot, in the
     order they happened.
@@ -176,6 +191,7 @@ def play_shot(
         if state.is_won:
             break
         if is_settled(state.spheres, settle_speed_threshold):
+            settle(state.spheres)
             break
 
     return merged_levels

@@ -1,7 +1,7 @@
 import pytest
 
 from sphere_merger.game.level import LevelDefinition, radius_for_level
-from sphere_merger.game.round import RoundState, play_shot, start_round
+from sphere_merger.game.round import RoundState, play_shot, settle, start_round
 from sphere_merger.physics.boundary import Boundary
 from sphere_merger.physics.sphere import Sphere
 from sphere_merger.physics.vector import Vector3
@@ -100,3 +100,24 @@ def test_play_shot_raises_once_round_is_over() -> None:
 
     with pytest.raises(RuntimeError):
         play_shot(state, angle_degrees=0.0, speed=0.0)
+
+
+def test_settle_zeroes_all_velocities() -> None:
+    radius = radius_for_level(0)
+    spheres = [
+        Sphere(Vector3(0.0, 0.0, radius), Vector3(1.0, -2.0, 0.3), radius, level=0),
+        Sphere(Vector3(3.0, 0.0, radius), Vector3(0.0, 0.0, 0.0), radius, level=0),
+    ]
+
+    settle(spheres)
+
+    assert all(sphere.velocity == Vector3(0.0, 0.0, 0.0) for sphere in spheres)
+
+
+def test_play_shot_leaves_a_settled_shot_at_true_rest() -> None:
+    level = _far_apart_level()
+    state = start_round(level)
+
+    play_shot(state, angle_degrees=0.0, speed=0.0)
+
+    assert all(sphere.velocity == Vector3(0.0, 0.0, 0.0) for sphere in state.spheres)
