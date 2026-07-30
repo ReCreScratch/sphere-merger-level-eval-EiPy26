@@ -71,3 +71,49 @@ abgewichen.
   Trial-and-Error bei rein visuellen Parametern, siehe Verlauf im Chat.
   Vollbildmodus ergänzt (Auflösung automatisch vom Betriebssystem), Esc zum
   Beenden, da im Vollbild kein Fenster-X existiert.
+- Meilenstein 3 (Stresstest) begonnen. Nutzerfrage brachte einen weiteren
+  Zeno-artigen Diskretisierungsfehler zutage: `_resolve_velocity`
+  (Kugel-Kugel-Kollision) hatte -- anders als `resolve_boundary` -- keine
+  Ruheschwelle. Bei gestapelten Kugeln (eine liegt auf einer anderen, die
+  selbst auf dem Boden ruht) drückt die Schwerkraft jeden Schritt erneut
+  eine winzige Annäherungsgeschwindigkeit in den Kontakt; ohne Ruhefall
+  ergab das ein endloses Jittern. Fix (analog zum Boden-Fix): unterhalb der
+  Schwelle wird effektiv mit Restitution 0 aufgelöst (vollständig inelastisch
+  entlang der Normalen) statt mit dem konfigurierten Wert reflektiert. Nach
+  dem Fix bleibt bei Stapeln ein **beschränkter periodischer Grenzzyklus**
+  (Geschwindigkeit oszilliert stabil, z.B. zwischen ca. -0.11 und +0.05
+  units/s, keine Explosion, aber kein exaktes Nullwerden) -- Boden- und
+  Kugel-Ruhemechanismus stoßen sich im selben Schritt gegenseitig wieder an,
+  ein bekanntes Problem bei gestapelten Objekten in Echtzeit-Physik-Engines.
+  Ein echter "Sleep"-Mechanismus (Einfrieren nach mehreren Schritten unter
+  Schwelle) wäre der robuste Fix, aber auf Wunsch zurückgestellt: "kommt zur
+  Ruhe" wird stattdessen als Geschwindigkeit unter einer kleinen Toleranz
+  definiert statt exakt Null (siehe `tests/physics/test_stress.py`).
+- Performance-Profiling (30 Kugeln, cProfile): ~76 Schritte/Sekunde, 85% der
+  Zeit in `find_colliding_pairs` (O(n²)-Vollscan, Vector3-Objektallokationen
+  pro Distanzberechnung), `deal`-Contracts vernachlässigbar (~0.2%). Auf
+  Wunsch zunächst Optimierung des bestehenden Ansatzes untersucht, bevor
+  über ein Spatial Grid entschieden wird.
+- Nutzer-Gegenfrage zum Grenzzyklus: warum kein sauberes Nullwerden? Analyse
+  ergab, dass eine exakt vertikale Kontaktnormale (Stapel exakt übereinander)
+  nie horizontal ausbricht, da Schwerkraft nie eine horizontale Komponente
+  einbringt -- ein stabiles, aber unrealistisches Gleichgewicht. Fix: Normale
+  wird bei (nahezu) exakt vertikaler Ausrichtung leicht Richtung +x gekippt
+  (`contact_normal`), analog zu echten physikalischen Systemen, die nie
+  perfekt symmetrisch sind und deshalb kippen statt endlos zu jittern.
+  Empirisch bestätigt (2-Kugel-Stapel kippt jetzt seitlich weg und settled).
+  Dabei entdeckt: der Tilt darf NICHT auf `resolve_overlap` angewendet
+  werden -- Verschieben entlang einer nicht exakt an der wahren Distanz
+  ausgerichteten Normalen um den (skalaren) Overlap-Betrag verfehlt die
+  Zieldistanz geometrisch, was `deal.ensure`s Postcondition
+  (`OVERLAP_EPSILON=1e-9`, sehr eng) tatsächlich verletzte -- via Hypothesis
+  gefunden. Sauberer Fix: `_raw_normal` (exakt, für `resolve_overlap`) von
+  `contact_normal` (gekippt, nur für `_resolve_velocity`) getrennt.
+- Zweite Nutzer-Beobachtung: der ursprüngliche Hypothesis-Settle-Test gab
+  JEDER Kugel eine unabhängige Zufallsgeschwindigkeit -- deutlich mehr
+  Energie als das echte Spiel je einbringt (nur ein Schuss, Rest ruht).
+  Test umgebaut: alle Kugeln ruhen, nur eine bekommt über `game.shooting.shoot`
+  einen Schuss (Winkel/Stärke gefuzzt). Damit wurde der Settle-Test sowohl
+  realistischer als auch praktisch testbar (vorher: Hypothesis brauchte
+  wiederholt >5 Minuten zum Shrinken degenerierter Vielkugel-Fälle, die im
+  echten Spiel nie vorkommen würden).

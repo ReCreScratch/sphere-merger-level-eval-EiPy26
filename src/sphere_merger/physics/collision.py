@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import math
+
 import deal
 
 from sphere_merger.physics.sphere import Sphere
@@ -12,6 +14,13 @@ OVERLAP_EPSILON = 1e-9
 # identically (relative velocity also zero). Fixed (not random) to keep the
 # solver deterministic.
 DEGENERATE_NORMAL = Vector3(1.0, 0.0, 0.0)
+# A contact normal with (near) zero horizontal component is tilted by this
+# much toward +x. Gravity never introduces a horizontal push on its own, so
+# an exactly vertical stack (or coincident centers with a purely vertical
+# relative velocity) can otherwise sit in an unstable equilibrium and
+# oscillate forever instead of toppling/separating sideways.
+VERTICAL_TILT_EPSILON = 1e-9
+VERTICAL_TILT_AMOUNT = 1e-3
 
 
 def distance(a: Sphere, b: Sphere) -> float:
@@ -44,17 +53,37 @@ def find_colliding_pairs(spheres: list[Sphere]) -> list[tuple[int, int]]:
     return pairs
 
 
-def _degenerate_normal(a: Sphere, b: Sphere) -> Vector3:
-    """Push-apart direction when both sphere centers coincide.
+def _raw_normal(a: Sphere, b: Sphere) -> Vector3:
+    """Exact unit vector from `a` towards `b`.
 
-    Uses the relative velocity direction (the spheres separate the way they
-    are already moving apart); falls back to a fixed axis if that is zero too.
+    Falls back to the relative velocity direction (then a fixed axis) only
+    if the centers exactly coincide (distance zero).
     """
+    delta = b.position - a.position
+    dist = delta.length()
+    if dist > 0:
+        return delta * (1 / dist)
     relative_velocity = b.velocity - a.velocity
     speed = relative_velocity.length()
-    if speed > 0:
-        return relative_velocity * (1 / speed)
-    return DEGENERATE_NORMAL
+    return relative_velocity * (1 / speed) if speed > 0 else DEGENERATE_NORMAL
+
+
+def contact_normal(a: Sphere, b: Sphere) -> Vector3:
+    """`_raw_normal`, but tilted slightly toward +x if (near) exactly
+    vertical -- for the velocity solver only, not overlap correction.
+
+    Gravity never introduces a horizontal push on its own, so an exactly
+    vertical stack can otherwise sit in an unstable equilibrium and jitter
+    forever instead of toppling/separating sideways. `resolve_overlap` must
+    NOT use this: pushing along a direction other than the true separation
+    axis by the scalar overlap amount no longer lands exactly on
+    `radius_sum` and can violate its postcondition.
+    """
+    normal = _raw_normal(a, b)
+    if math.hypot(normal.x, normal.y) < VERTICAL_TILT_EPSILON:
+        tilted = Vector3(VERTICAL_TILT_AMOUNT, 0.0, normal.z)
+        normal = tilted * (1 / tilted.length())
+    return normal
 
 
 @deal.pre(lambda a, b: is_colliding(a, b))
@@ -65,10 +94,8 @@ def resolve_overlap(a: Sphere, b: Sphere) -> None:
     Mutates `a.position` and `b.position` in place. The correction is
     mass-weighted so the lighter sphere moves proportionally more.
     """
-    delta = b.position - a.position
-    dist = delta.length()
-    normal = delta * (1 / dist) if dist > 0 else _degenerate_normal(a, b)
-    overlap = a.radius + b.radius - dist
+    normal = _raw_normal(a, b)
+    overlap = a.radius + b.radius - distance(a, b)
     total_mass = a.mass + b.mass
     a.position = a.position - normal * (overlap * (b.mass / total_mass))
     b.position = b.position + normal * (overlap * (a.mass / total_mass))

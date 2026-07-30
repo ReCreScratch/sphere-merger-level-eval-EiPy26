@@ -7,7 +7,12 @@ from dataclasses import dataclass
 import deal
 
 from sphere_merger.physics.boundary import Boundary, resolve_boundary
-from sphere_merger.physics.collision import find_colliding_pairs, is_colliding, resolve_overlap
+from sphere_merger.physics.collision import (
+    contact_normal,
+    find_colliding_pairs,
+    is_colliding,
+    resolve_overlap,
+)
 from sphere_merger.physics.sphere import Sphere
 from sphere_merger.physics.vector import Vector3
 
@@ -80,24 +85,32 @@ def step(
         a, b = spheres[i], spheres[j]
         if not is_colliding(a, b):
             continue
-        _resolve_velocity(a, b, config.sphere_restitution)
+        _resolve_velocity(a, b, config.sphere_restitution, rest_velocity_threshold)
         resolve_overlap(a, b)
 
 
-@deal.pre(lambda a, b, restitution: is_colliding(a, b))
-def _resolve_velocity(a: Sphere, b: Sphere, restitution: float) -> None:
+@deal.pre(lambda a, b, restitution, rest_velocity_threshold=0.0: is_colliding(a, b))
+def _resolve_velocity(
+    a: Sphere, b: Sphere, restitution: float, rest_velocity_threshold: float = 0.0
+) -> None:
     """Impulse-based collision response along the contact normal.
 
     Tangential velocity is left untouched (no spin/friction in collisions).
+    Below `rest_velocity_threshold`, the collision is treated as resting
+    contact (fully inelastic along the normal) rather than a bounce. This
+    matters for stacked spheres: gravity re-drives the same tiny approach
+    speed into the contact every step (like it does at the floor), and
+    without a rest case, that would jitter forever instead of settling --
+    the same discretization artifact `resolve_boundary`'s
+    `rest_velocity_threshold` already guards against.
     """
-    delta = b.position - a.position
-    dist = delta.length()
-    normal = delta * (1 / dist) if dist > 0 else Vector3(1.0, 0.0, 0.0)
+    normal = contact_normal(a, b)
 
     approach_speed = (a.velocity - b.velocity).dot(normal)
     if approach_speed <= 0:
         return
 
-    impulse = (1 + restitution) * approach_speed / (1 / a.mass + 1 / b.mass)
+    effective_restitution = 0.0 if approach_speed < rest_velocity_threshold else restitution
+    impulse = (1 + effective_restitution) * approach_speed / (1 / a.mass + 1 / b.mass)
     a.velocity = a.velocity - normal * (impulse / a.mass)
     b.velocity = b.velocity + normal * (impulse / b.mass)
