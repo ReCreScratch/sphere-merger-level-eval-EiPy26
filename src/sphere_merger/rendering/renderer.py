@@ -432,9 +432,8 @@ def run_round(
     round is won before another shot is accepted, and the round ends when
     the target score is reached or the queue runs out. Right-click while
     aiming cancels the shot. Reset restarts the same `level` from scratch.
-    A slider lets the at-rest friction cap be adjusted live, taking effect
-    on the very next physics step (mutates `level.physics_config.friction_max`
-    in place).
+    A slider lets friction be adjusted live, taking effect on the very next
+    physics step (mutates `level.physics_config.friction` in place).
     Returns the final `RoundState` once the window is closed.
 
     Aim power is tracked via relative mouse movement (the cursor is hidden
@@ -472,7 +471,7 @@ def run_round(
         pygame.Rect(120, 16, 200, 8),
         min_value=0.0,
         max_value=1.0,
-        value=level.physics_config.friction_max,
+        value=level.physics_config.friction,
     )
     screen_center = (render_config.window_size[0] // 2, render_config.window_size[1] // 2)
     aiming = False
@@ -498,7 +497,7 @@ def run_round(
                 elif friction_slider.rect.inflate(0, 16).collidepoint(event.pos):
                     dragging_slider = True
                     friction_slider.value = friction_slider.value_at(event.pos[0])
-                    level.physics_config.friction_max = friction_slider.value
+                    level.physics_config.friction = friction_slider.value
                 elif not state.is_over and state.remaining_queue and is_settled(state.spheres):
                     aiming = True
                     drag_vector = [0.0, 0.0]
@@ -510,7 +509,7 @@ def run_round(
                 pygame.mouse.set_visible(True)
             elif event.type == pygame.MOUSEMOTION and dragging_slider:
                 friction_slider.value = friction_slider.value_at(event.pos[0])
-                level.physics_config.friction_max = friction_slider.value
+                level.physics_config.friction = friction_slider.value
             elif event.type == pygame.MOUSEBUTTONUP and event.button == 1:
                 dragging_slider = False
                 if aiming:
@@ -585,7 +584,7 @@ def run_round(
                 screen.blit(angle_text, (arrow_tip[0] + 10, arrow_tip[1] - 10))
 
         draw_button(screen, font, reset_button, "Reset", reset_button.collidepoint(mouse_pos))
-        draw_slider(screen, font, friction_slider, "Reibung (Ruhephase)")
+        draw_slider(screen, font, friction_slider, "Reibung")
         _draw_round_hud(screen, font, big_font, state, clock.get_fps())
 
         pygame.display.flip()
