@@ -3,7 +3,7 @@
 Aus `Projektplan.md` übernommen, als Checkliste.
 
 - [x] 1. Erste Physics-Engine Iteration (Geschwindigkeit-/Overlap-Solver, Kollisionserkennung, Kräfteübertragung)
-- [ ] 2. Einfache Objekt-Klasse + Rendern an beliebiger Stelle
+- [x] 2. Einfache Objekt-Klasse + Rendern an beliebiger Stelle
 - [ ] 3. Physics-Test + Stresstest (kleines Feld, 30 Kugeln, eigener Laptop)
 - [ ] 4. Game-Loop mit Kugelschuss, Merge-Logik, Punkte/Sieg-/Niederlagebedingung
 - [ ] 5. 3 baseline-Level designen (Lösung + Zielpunktzahl)

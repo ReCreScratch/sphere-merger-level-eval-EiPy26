@@ -26,6 +26,20 @@ def test_wall_bounce_reflects_velocity_and_clamps_position() -> None:
     assert s.velocity.x == -1.0
 
 
+def test_velocity_below_rest_threshold_settles_instead_of_bouncing() -> None:
+    s = Sphere(Vector3(0.0, 0.0, 0.4), Vector3(0.0, 0.0, -0.02), radius=0.5, level=0)
+    resolve_boundary(s, FIELD, restitution=1.0, rest_velocity_threshold=0.05)
+    assert s.position.z == 0.5
+    assert s.velocity.z == 0.0
+
+
+def test_velocity_above_rest_threshold_still_bounces() -> None:
+    s = Sphere(Vector3(0.0, 0.0, 0.4), Vector3(0.0, 0.0, -1.0), radius=0.5, level=0)
+    resolve_boundary(s, FIELD, restitution=1.0, rest_velocity_threshold=0.05)
+    assert s.position.z == 0.5
+    assert s.velocity.z == 1.0
+
+
 def test_ceiling_is_optional() -> None:
     open_top = Boundary(x_min=-5.0, x_max=5.0, y_min=-5.0, y_max=5.0, z_min=0.0)
     s = Sphere(Vector3(0.0, 0.0, 1000.0), Vector3(0.0, 0.0, 10.0), radius=0.5, level=0)

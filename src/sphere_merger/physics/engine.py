@@ -14,12 +14,36 @@ from sphere_merger.physics.vector import Vector3
 
 @dataclass
 class PhysicsConfig:
-    """Tunable physics parameters, exposed for a future settings menu."""
+    """Tunable physics parameters, exposed for a future settings menu.
+
+    Attributes:
+        gravity: Downward acceleration applied to `velocity.z` each step
+            (units/s^2). Higher = falls faster.
+        friction: Fraction of horizontal speed removed per step while a
+            sphere rests on the floor (0 = frictionless ice, 1 = stops dead
+            on contact).
+        sphere_restitution: Elasticity of sphere-sphere collisions (0 = fully
+            inelastic, spheres stick to their post-collision velocity with no
+            bounce-back; 1 = fully elastic, no kinetic energy lost).
+        boundary_restitution: Elasticity of contact with the field boundary
+            (floor and walls). At 1.0 the floor is a perfect trampoline and a
+            falling sphere bounces forever at the same height; values below 1
+            lose energy on every bounce until the sphere settles.
+        rest_threshold_factor: Multiplier on `gravity * dt` (one step's worth
+            of gravity) below which boundary contact is treated as resting
+            instead of bouncing. Without this, a settling sphere never fully
+            stops -- it converges to a small non-zero "jitter" velocity
+            instead, a discretization artifact rather than real physics. The
+            steady-state jitter speed is always < `gravity * dt`, so a
+            factor of 1.0 reliably stops it regardless of
+            `boundary_restitution`; 0 disables resting altogether.
+    """
 
     gravity: float = 9.81
     friction: float = 0.1
-    sphere_restitution: float = 1.0
-    boundary_restitution: float = 1.0
+    sphere_restitution: float = 0.9
+    boundary_restitution: float = 0.6
+    rest_threshold_factor: float = 1.0
 
 
 @deal.pre(lambda spheres, dt, boundary, config=None: dt > 0)
@@ -37,13 +61,14 @@ def step(
     """
     if config is None:
         config = PhysicsConfig()
+    rest_velocity_threshold = config.rest_threshold_factor * config.gravity * dt
 
     for sphere in spheres:
         sphere.velocity = Vector3(
             sphere.velocity.x, sphere.velocity.y, sphere.velocity.z - config.gravity * dt
         )
         sphere.position = sphere.position + sphere.velocity * dt
-        resolve_boundary(sphere, boundary, config.boundary_restitution)
+        resolve_boundary(sphere, boundary, config.boundary_restitution, rest_velocity_threshold)
         if sphere.position.z <= boundary.z_min + sphere.radius + 1e-9:
             sphere.velocity = Vector3(
                 sphere.velocity.x * (1 - config.friction),
