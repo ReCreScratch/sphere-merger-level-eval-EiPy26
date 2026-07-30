@@ -42,3 +42,33 @@ def test_colliding_spheres_separate_after_step() -> None:
     b = Sphere(Vector3(1.5, 0.0, 1.0), Vector3(-1.0, 0.0, 0.0), radius=1.0, level=0)
     step([a, b], dt=0.01, boundary=FIELD, config=PhysicsConfig(gravity=0.0))
     assert (b.position - a.position).length() >= a.radius + b.radius - 1e-6
+
+
+def test_collision_filter_excludes_matching_pairs_from_resolution() -> None:
+    a = Sphere(Vector3(0.0, 0.0, 1.0), Vector3(1.0, 0.0, 0.0), radius=1.0, level=0)
+    b = Sphere(Vector3(1.5, 0.0, 1.0), Vector3(-1.0, 0.0, 0.0), radius=1.0, level=0)
+    step(
+        [a, b],
+        dt=0.01,
+        boundary=FIELD,
+        config=PhysicsConfig(gravity=0.0, friction=0.0),
+        collision_filter=lambda x, y: False,
+    )
+    # Neither the velocity solver nor the overlap solver ran: velocities are
+    # unchanged and the spheres are still overlapping.
+    assert a.velocity.x == pytest.approx(1.0)
+    assert b.velocity.x == pytest.approx(-1.0)
+    assert (b.position - a.position).length() < a.radius + b.radius
+
+
+def test_collision_filter_still_resolves_pairs_it_allows() -> None:
+    a = Sphere(Vector3(0.0, 0.0, 1.0), Vector3(1.0, 0.0, 0.0), radius=1.0, level=0)
+    b = Sphere(Vector3(1.5, 0.0, 1.0), Vector3(-1.0, 0.0, 0.0), radius=1.0, level=0)
+    step(
+        [a, b],
+        dt=0.01,
+        boundary=FIELD,
+        config=PhysicsConfig(gravity=0.0, friction=0.0),
+        collision_filter=lambda x, y: True,
+    )
+    assert (b.position - a.position).length() >= a.radius + b.radius - 1e-6

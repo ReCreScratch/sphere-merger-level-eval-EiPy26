@@ -132,3 +132,30 @@ abgewichen.
   lassen: 5260 Schritte/Sekunde bei 30 Kugeln (0.190 ms/Schritt) -- deutlich
   über dem Laptop-Wert (~188 Schritte/s). Invarianten weiterhin erfüllt
   (0 Kugeln außerhalb Feld, max. Endgeschwindigkeit 0.059).
+- Meilenstein 4 (Game-Loop) begonnen. `game/level.py` (`LevelDefinition` +
+  geseedete `generate_random_level`) umgesetzt: sowohl handdesignte
+  baseline-Level (feste Werte) als auch Zufallslevel (eigener
+  `random.Random(seed)`, rührt den globalen `random`-State nicht an) landen
+  im selben Typ. `radius_for_level` leitet die Kugelgröße pro Level aus
+  Massenerhaltung her (2 gleich große Kugeln mergen -> doppelte Masse ->
+  Radius skaliert mit `2**(level/3)`), damit später gemergte und
+  handplatzierte Kugeln gleichen Levels immer gleich groß sind.
+  Anschließend `game/merge.py` (`merge_spheres`, `resolve_merges`)
+  ergänzt: kombiniert massen- und impulserhaltend zwei gleich-level
+  Kugeln zu einer Level+1-Kugel. Dafür `physics/engine.py::step` um einen
+  optionalen `collision_filter`-Parameter erweitert (Default `None`,
+  bestehende Tests unverändert grün), über den die Game-Loop
+  gleich-level Paare von der Physik-Bounce-Auflösung ausnimmt, damit
+  `resolve_merges` sie stattdessen übernehmen kann.
+- Beim Testen nebenbei einen bestehenden, von Meilenstein 4 unabhängigen
+  Bug in `test_stress.py::test_many_spheres_stay_in_bounds_and_never_explode`
+  gefunden: Hypothesis fand einen Fall (4 exakt übereinanderliegende
+  Kugeln, eine mit `vz=1.0`), in dem eine Kugel bis zu ~3.4e-4 unter den
+  Boden sinkt -- über der mit 1e-6 sehr engen Toleranz. Per `git stash`
+  bestätigt, dass der Fall identisch auch ohne die heutigen Änderungen
+  auftritt, also ein latenter Randfall aus Meilenstein 3 ist, den
+  Hypothesis erst jetzt zufällig fand. Auf Wunsch zurückgestellt (Fokus
+  bleibt auf Meilenstein 4); Test vorerst mit `pytest.mark.xfail(strict=False)`
+  markiert statt einfach entfernt, damit er als offener Punkt sichtbar
+  bleibt und automatisch wieder auffällt (als "unerwartet bestanden"),
+  falls der Fix mal nebenbei passiert.

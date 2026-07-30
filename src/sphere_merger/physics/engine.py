@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 
 import deal
@@ -51,18 +52,26 @@ class PhysicsConfig:
     rest_threshold_factor: float = 1.0
 
 
-@deal.pre(lambda spheres, dt, boundary, config=None: dt > 0)
+@deal.pre(lambda spheres, dt, boundary, config=None, collision_filter=None: dt > 0)
 def step(
     spheres: list[Sphere],
     dt: float,
     boundary: Boundary,
     config: PhysicsConfig | None = None,
+    collision_filter: Callable[[Sphere, Sphere], bool] | None = None,
 ) -> None:
     """Advance all `spheres` by one time step `dt`, mutating them in place.
 
     Fixed, deterministic order: gravity -> integration -> boundary contact
     (incl. floor friction) -> pairwise sphere collisions (velocity solver,
     then overlap solver) -- always in `spheres` list order.
+
+    `collision_filter`, if given, is checked for every colliding pair before
+    resolving it; pairs for which it returns `False` are left exactly as
+    found (no bounce, no overlap correction). This lets callers outside the
+    physics layer take over specific pairs themselves -- e.g. the game loop
+    handling same-level spheres as a merge instead of a bounce -- without
+    the physics engine needing to know why.
     """
     if config is None:
         config = PhysicsConfig()
@@ -84,6 +93,8 @@ def step(
     for i, j in find_colliding_pairs(spheres):
         a, b = spheres[i], spheres[j]
         if not is_colliding(a, b):
+            continue
+        if collision_filter is not None and not collision_filter(a, b):
             continue
         _resolve_velocity(a, b, config.sphere_restitution, rest_velocity_threshold)
         resolve_overlap(a, b)
