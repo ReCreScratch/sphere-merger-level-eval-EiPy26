@@ -56,7 +56,9 @@ def test_inelastic_floor_bounce_never_exceeds_starting_energy_and_settles() -> N
     bounce and eventually come to rest -- not hop forever at constant height.
     """
     s = Sphere(Vector3(0.0, 0.0, 5.0), Vector3(0.0, 0.0, 0.0), radius=0.5, level=0)
-    config = PhysicsConfig(gravity=9.81, friction=0.0, boundary_restitution=0.6)
+    config = PhysicsConfig(
+        gravity=9.81, friction_min=0.0, friction_max=0.0, boundary_restitution=0.6
+    )
 
     initial_energy = _mechanical_energy(s, config.gravity)
     max_energy_seen = initial_energy

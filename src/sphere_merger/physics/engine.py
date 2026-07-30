@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from collections.abc import Callable
 from dataclasses import dataclass
 
@@ -25,9 +26,18 @@ class PhysicsConfig:
     Attributes:
         gravity: Downward acceleration applied to `velocity.z` each step
             (units/s^2). Higher = falls faster.
-        friction: Fraction of horizontal speed removed per step while a
-            sphere rests on the floor (0 = frictionless ice, 1 = stops dead
-            on contact).
+        friction_min: Fraction of horizontal speed removed per step while a
+            sphere rests on the floor, applied at/above
+            `friction_speed_threshold` (0 = frictionless ice, 1 = stops dead
+            on contact). Kept low so a fast sphere still slides far enough
+            for bank shots off other spheres/walls.
+        friction_max: Friction fraction applied as horizontal speed
+            approaches zero. Higher than `friction_min` so a nearly-stopped
+            sphere snaps to rest quickly instead of crawling for hundreds of
+            extra steps.
+        friction_speed_threshold: Horizontal speed at/above which
+            `friction_min` applies; between 0 and this speed, friction ramps
+            linearly down to `friction_min` as speed increases.
         sphere_restitution: Elasticity of sphere-sphere collisions (0 = fully
             inelastic, spheres stick to their post-collision velocity with no
             bounce-back; 1 = fully elastic, no kinetic energy lost).
@@ -46,7 +56,9 @@ class PhysicsConfig:
     """
 
     gravity: float = 9.81
-    friction: float = 0.05
+    friction_min: float = 0.015
+    friction_max: float = 0.3
+    friction_speed_threshold: float = 6.0
     sphere_restitution: float = 0.9
     boundary_restitution: float = 0.6
     rest_threshold_factor: float = 1.0
@@ -84,9 +96,10 @@ def step(
         sphere.position = sphere.position + sphere.velocity * dt
         resolve_boundary(sphere, boundary, config.boundary_restitution, rest_velocity_threshold)
         if sphere.position.z <= boundary.z_min + sphere.radius + 1e-9:
+            friction = _resting_friction(sphere.velocity, config)
             sphere.velocity = Vector3(
-                sphere.velocity.x * (1 - config.friction),
-                sphere.velocity.y * (1 - config.friction),
+                sphere.velocity.x * (1 - friction),
+                sphere.velocity.y * (1 - friction),
                 sphere.velocity.z,
             )
 
@@ -98,6 +111,27 @@ def step(
             continue
         _resolve_velocity(a, b, config.sphere_restitution, rest_velocity_threshold)
         resolve_overlap(a, b)
+
+
+def _resting_friction(velocity: Vector3, config: PhysicsConfig) -> float:
+    """Friction fraction for a sphere resting on the floor at `velocity`.
+
+    Linearly interpolates from `friction_max` at zero horizontal speed down
+    to `friction_min` at/above `friction_speed_threshold`: fast spheres keep
+    sliding (bank shots stay possible), slow ones shed their last bit of
+    speed quickly instead of crawling for hundreds of extra steps.
+
+    >>> config = PhysicsConfig(friction_min=0.0, friction_max=0.4, friction_speed_threshold=4.0)
+    >>> _resting_friction(Vector3(4.0, 0.0, 0.0), config)
+    0.0
+    >>> _resting_friction(Vector3(0.0, 0.0, 0.0), config)
+    0.4
+    >>> _resting_friction(Vector3(2.0, 0.0, 0.0), config)
+    0.2
+    """
+    horizontal_speed = math.hypot(velocity.x, velocity.y)
+    speed_fraction = min(horizontal_speed / config.friction_speed_threshold, 1.0)
+    return config.friction_max - (config.friction_max - config.friction_min) * speed_fraction
 
 
 @deal.pre(lambda a, b, restitution, rest_velocity_threshold=0.0: is_colliding(a, b))

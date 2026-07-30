@@ -31,7 +31,7 @@ if __name__ == "__main__":
         columns=8,
         rows=4,
         speed=50.0,
-        physics_config=PhysicsConfig(friction=0.02),
+        physics_config=PhysicsConfig(friction_min=0.02, friction_max=0.02),
         render_config=RenderConfig(),
         fullscreen=True,
     )
