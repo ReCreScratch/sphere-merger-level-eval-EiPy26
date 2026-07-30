@@ -128,3 +128,7 @@ abgewichen.
   Spatial Grid würde bei dieser Kugelanzahl aber nur noch ~1.5-2x zusätzlich
   bringen (Amdahl: der O(n)-Anteil bleibt unverändert) -- Entscheidung über
   Spatial Grid vorerst zurückgestellt.
+- `scripts/stress_benchmark.py` auf dem Hauptrechner (statt Laptop) laufen
+  lassen: 5260 Schritte/Sekunde bei 30 Kugeln (0.190 ms/Schritt) -- deutlich
+  über dem Laptop-Wert (~188 Schritte/s). Invarianten weiterhin erfüllt
+  (0 Kugeln außerhalb Feld, max. Endgeschwindigkeit 0.059).
