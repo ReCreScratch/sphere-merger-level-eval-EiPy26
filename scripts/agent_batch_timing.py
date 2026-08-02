@@ -36,11 +36,7 @@ from sphere_merger.physics.vector import Vector2
 from sphere_merger.rendering.agent_grid import run_agent_grid
 from sphere_merger.rendering.renderer import RenderConfig
 
-# "rust" is temporarily unavailable: the native extension hasn't been
-# ported to the 2D/no-gravity physics model yet (see
-# docs/physics_optimizations.md) -- physics.engine.step's native branch
-# raises NotImplementedError until that lands.
-BACKEND: Literal["python", "rust"] = "python"
+BACKEND: Literal["python", "rust"] = "rust"
 TOP_N = 9
 SOURCE_SCRIPT = f"agent_batch_timing.py[{BACKEND}]"
 

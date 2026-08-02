@@ -10,8 +10,17 @@ from __future__ import annotations
 import copy
 from typing import Protocol
 
-from sphere_merger.game.round import RoundState, play_shot
+from sphere_merger.game.level import radius_for_level
+from sphere_merger.game.round import (
+    DT,
+    MAX_SETTLE_STEPS,
+    SETTLE_SPEED_THRESHOLD,
+    RoundState,
+    play_shot,
+)
 from sphere_merger.physics.engine import current_backend
+from sphere_merger.physics.sphere import Sphere
+from sphere_merger.physics.vector import Vector2
 
 DEFAULT_SPEED = 10.0
 ANGLE_RANGE_DEGREES = (0.0, 90.0)
@@ -61,6 +70,62 @@ def _clone_state(state: RoundState) -> RoundState:
     )
 
 
+def _simulate_shot_native(
+    state: RoundState, angle_degrees: float, speed: float
+) -> tuple[RoundState, int]:
+    """`simulate_shot`'s native-backend branch: the whole settle loop (spawn
+    + repeated physics step + merge-resolve + score) runs as one call into
+    `sphere_merger_native.simulate_shot_native` instead of many Python-level
+    `step` calls -- see docs/physics_optimizations.md for why this, not
+    `step_native` alone, is where the native backend's real speedup is.
+
+    A custom `score_fn`/`max_settle_steps`/`settle_speed_threshold` other
+    than `game.round`'s defaults isn't supported here -- nothing in this
+    codebase ever passes one to `play_shot` on this path, so the native
+    settle loop hardcodes `game.scoring.default_merge_score` and these
+    constants directly (arbitrary Python callables can't cross the FFI
+    boundary anyway).
+    """
+    import sphere_merger_native
+
+    next_level = state.remaining_queue[0]
+    next_radius = radius_for_level(next_level)
+    boundary = state.level.boundary
+    config = state.level.physics_config
+    spawn = state.level.spawn_position
+
+    final_spheres, gain, _won = sphere_merger_native.simulate_shot_native(
+        [
+            (s.position.x, s.position.y, s.velocity.x, s.velocity.y, s.radius, s.level)
+            for s in state.spheres
+        ],
+        next_level,
+        next_radius,
+        (spawn.x, spawn.y),
+        angle_degrees,
+        speed,
+        DT,
+        (boundary.x_min, boundary.x_max, boundary.y_min, boundary.y_max),
+        (config.friction, config.sphere_restitution, config.boundary_restitution),
+        MAX_SETTLE_STEPS,
+        SETTLE_SPEED_THRESHOLD,
+        state.score,
+        state.level.target_score,
+    )
+
+    trial = RoundState(
+        level=state.level,
+        spheres=[
+            Sphere(position=Vector2(x, y), velocity=Vector2(vx, vy), radius=radius, level=level)
+            for x, y, vx, vy, radius, level in final_spheres
+        ],
+        remaining_queue=state.remaining_queue[1:],
+        score=state.score + gain,
+        shots_taken=state.shots_taken + 1,
+    )
+    return trial, gain
+
+
 def simulate_shot(state: RoundState, angle_degrees: float, speed: float) -> tuple[RoundState, int]:
     """Play one shot on a clone of `state`, leaving `state` itself untouched.
 
@@ -68,10 +133,7 @@ def simulate_shot(state: RoundState, angle_degrees: float, speed: float) -> tupl
     (not the round's cumulative score).
     """
     if current_backend() == "rust":
-        raise NotImplementedError(
-            "native backend not yet ported to the 2D physics model -- use the Python "
-            "backend (the default) until native/sphere_merger_native is updated to match"
-        )
+        return _simulate_shot_native(state, angle_degrees, speed)
     trial = _clone_state(state)
     score_before = trial.score
     play_shot(trial, angle_degrees, speed)

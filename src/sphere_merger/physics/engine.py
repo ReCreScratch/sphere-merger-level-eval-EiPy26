@@ -16,6 +16,7 @@ from sphere_merger.physics.collision import (
     resolve_overlap,
 )
 from sphere_merger.physics.sphere import Sphere
+from sphere_merger.physics.vector import Vector2
 
 # Purely a broad-phase optimization (skip the O(n^2) scan for pairs that are
 # both exactly stationary, see find_colliding_pairs) -- not a physical
@@ -142,17 +143,28 @@ def _step_native(
     config: PhysicsConfig,
     collision_filter: Callable[[Sphere, Sphere], bool] | None,
 ) -> None:
-    """`step`'s native-backend branch.
+    """`step`'s native-backend branch, active while `native_backend()` (or
+    `enable_native_backend()`) is in effect.
 
-    Not yet ported to the 2D/no-gravity model -- `native/sphere_merger_native`
-    still expects the old 3D signature. Raises until that port lands (see
-    docs/physics_optimizations.md); the Python path above is fully correct
-    and is what every caller gets by default (`current_backend() == "python"`).
+    `collision_filter` can't cross the FFI boundary as an arbitrary Python
+    callable, so it's collapsed to a bool: non-`None` is assumed to mean
+    "exclude same-level pairs", the only filter `game.round.advance_physics`
+    (the sole caller that ever passes one) uses. A genuinely different
+    filter would silently misbehave under this backend.
     """
-    raise NotImplementedError(
-        "native backend not yet ported to the 2D physics model -- use the Python backend "
-        "(the default) until native/sphere_merger_native is updated to match"
+    import sphere_merger_native
+
+    boundary_args = (boundary.x_min, boundary.x_max, boundary.y_min, boundary.y_max)
+    config_args = (config.friction, config.sphere_restitution, config.boundary_restitution)
+    sphere_args = [
+        (s.position.x, s.position.y, s.velocity.x, s.velocity.y, s.radius, s.level) for s in spheres
+    ]
+    updated = sphere_merger_native.step_native(
+        sphere_args, dt, boundary_args, config_args, collision_filter is not None
     )
+    for sphere, (x, y, vx, vy, _radius, _level) in zip(spheres, updated, strict=True):
+        sphere.position = Vector2(x, y)
+        sphere.velocity = Vector2(vx, vy)
 
 
 @deal.pre(lambda a, b, restitution: is_colliding(a, b))

@@ -1,18 +1,16 @@
-"""Manual demo: record greedy/lookahead playthroughs for a fixed list of
-seeds and open the grid so they can be watched via Play -- no manual play,
-no re-simulation once the window is open.
-
-Python backend only for now: the native extension hasn't been ported to
-the 2D/no-gravity physics model yet (see docs/physics_optimizations.md).
+"""Manual demo: record greedy/lookahead playthroughs (native backend) for a
+fixed list of seeds and open the grid so they can be watched via Play --
+no manual play, no re-simulation once the window is open.
 """
 
 from concurrent.futures import ProcessPoolExecutor
 
 from sphere_merger.agents.greedy_agent import GreedyAgent
 from sphere_merger.agents.lookahead_agent import LookaheadAgent
-from sphere_merger.agents.runner import disable_contracts_in_worker, record_playthrough
+from sphere_merger.agents.runner import prepare_native_batch_worker, record_playthrough
 from sphere_merger.game.level import LevelDefinition, generate_random_level
 from sphere_merger.physics.boundary import Boundary
+from sphere_merger.physics.engine import native_backend
 from sphere_merger.physics.vector import Vector2
 from sphere_merger.rendering.agent_grid import run_agent_grid
 from sphere_merger.rendering.renderer import RenderConfig
@@ -37,7 +35,7 @@ def _build_level(seed: int) -> LevelDefinition:
 
 
 if __name__ == "__main__":
-    with ProcessPoolExecutor(initializer=disable_contracts_in_worker) as executor:
+    with ProcessPoolExecutor(initializer=prepare_native_batch_worker) as executor, native_backend():
         greedy = GreedyAgent(speed=SHOT_SPEED, executor=executor)
         lookahead = LookaheadAgent(speed=SHOT_SPEED, executor=executor)
 
