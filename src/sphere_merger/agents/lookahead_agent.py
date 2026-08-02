@@ -4,12 +4,14 @@ first shot leading to the best combined score."""
 
 from __future__ import annotations
 
+from concurrent.futures import Executor
+
 from sphere_merger.agents.base import (
     ANGLE_RANGE_DEGREES,
     ANGLE_STEP_DEGREES,
     DEFAULT_SPEED,
     candidate_angles,
-    simulate_shot,
+    candidate_total_gain,
 )
 from sphere_merger.game.round import RoundState
 
@@ -28,22 +30,24 @@ class LookaheadAgent:
         angle_range: tuple[float, float] = ANGLE_RANGE_DEGREES,
         angle_step: float = ANGLE_STEP_DEGREES,
         speed: float = DEFAULT_SPEED,
+        executor: Executor | None = None,
     ) -> None:
+        """`executor`, if given, evaluates this shot's candidates (each
+        with its own full next-shot sweep) across its worker processes
+        instead of sequentially -- every candidate is an independent
+        simulation, so this only speeds things up, it never changes the
+        result. The caller owns the executor's lifecycle.
+        """
         self._angles = candidate_angles(angle_range, angle_step)
         self._speed = speed
+        self._executor = executor
 
     def choose_shot(self, state: RoundState) -> tuple[float, float]:
         """Simulate two shots ahead for every candidate, return the best first shot."""
-        best_angle = self._angles[0]
-        best_total_gain = -1
-        for angle in self._angles:
-            trial, gain = simulate_shot(state, angle, self._speed)
-            total_gain = gain if trial.is_over else gain + self._best_next_gain(trial)
-            if total_gain > best_total_gain:
-                best_total_gain = total_gain
-                best_angle = angle
+        args = [(state, angle, self._speed, self._angles) for angle in self._angles]
+        if self._executor is not None:
+            results = list(self._executor.map(candidate_total_gain, args))
+        else:
+            results = [candidate_total_gain(a) for a in args]
+        best_angle, _ = max(results, key=lambda result: result[1])
         return best_angle, self._speed
-
-    def _best_next_gain(self, state: RoundState) -> int:
-        """Highest single-shot gain achievable from `state`'s next queued shot."""
-        return max(simulate_shot(state, angle, self._speed)[1] for angle in self._angles)
