@@ -17,6 +17,7 @@ seconds-per-level agent search itself.
 from __future__ import annotations
 
 import time
+from collections.abc import Callable
 from concurrent.futures import ProcessPoolExecutor
 from contextlib import nullcontext
 from datetime import date
@@ -34,6 +35,7 @@ from sphere_merger.agents.runner import (
 )
 from sphere_merger.game.interesting_levels import save_run
 from sphere_merger.game.level import LevelDefinition, generate_random_level
+from sphere_merger.game.shrink import shrink_level
 from sphere_merger.physics.boundary import Boundary
 from sphere_merger.physics.engine import native_backend
 from sphere_merger.physics.vector import Vector2
@@ -42,6 +44,7 @@ from sphere_merger.rendering.renderer import RenderConfig
 
 BACKEND: Literal["python", "rust"] = "rust"
 TOP_N = 9
+SHRINK_TOP_N = False
 SOURCE_SCRIPT = f"agent_batch_timing.py[{BACKEND}]"
 
 FIELD = Boundary(x_min=-6.0, x_max=6.0, y_min=-6.0, y_max=6.0)
@@ -50,6 +53,7 @@ SPAWN = Vector2(FIELD.x_min + SPAWN_MARGIN, FIELD.y_min + SPAWN_MARGIN)
 SHOT_SPEED = 25.0
 RANDOM_SEED = 0
 LEVEL_COUNT = 1000
+INITIAL_SPHERE_COUNT = 10
 
 WINDOW_SIZE = (900, 300)
 BAR_COLOR = (90, 160, 220)
@@ -63,7 +67,7 @@ def _build_level(seed: int) -> LevelDefinition:
         boundary=FIELD,
         spawn_position=SPAWN,
         target_score=999,
-        initial_sphere_count=6,
+        initial_sphere_count=INITIAL_SPHERE_COUNT,
         shot_count=2,
         level_range=(0, 2),
     )
@@ -157,6 +161,37 @@ if __name__ == "__main__":
 
         total_elapsed = time.perf_counter() - total_start
 
+        top = sorted(per_level, key=lambda entry: abs(entry[6] - entry[10]), reverse=True)[:TOP_N]
+
+        ShrunkResult = tuple[LevelDefinition, Shots, int, Shots, int]
+        shrunk_by_seed: dict[int, ShrunkResult] = {}
+        if SHRINK_TOP_N:
+
+            def _gap(level: LevelDefinition) -> int:
+                _gs, greedy_score, _gc = record_playthrough(level, greedy)
+                _ls, lookahead_score, _lc = record_playthrough(level, lookahead)
+                return abs(greedy_score - lookahead_score)
+
+            def _at_least_as_divergent(baseline_gap: int) -> Callable[[LevelDefinition], bool]:
+                return lambda lvl: _gap(lvl) >= baseline_gap
+
+            for entry in top:
+                seed = entry[0]
+                baseline_gap = abs(entry[6] - entry[10])
+                original = _build_level(seed)
+                shrunk = shrink_level(original, is_interesting=_at_least_as_divergent(baseline_gap))
+                shrunk_greedy_shots, shrunk_greedy_score, _sgc = record_playthrough(shrunk, greedy)
+                shrunk_lookahead_shots, shrunk_lookahead_score, _slc = record_playthrough(
+                    shrunk, lookahead
+                )
+                shrunk_by_seed[seed] = (
+                    shrunk,
+                    shrunk_greedy_shots,
+                    shrunk_greedy_score,
+                    shrunk_lookahead_shots,
+                    shrunk_lookahead_score,
+                )
+
     pygame.quit()
 
     print(
@@ -213,7 +248,7 @@ if __name__ == "__main__":
             },
             "spawn_margin": SPAWN_MARGIN,
             "target_score": 999,
-            "initial_sphere_count": 6,
+            "initial_sphere_count": INITIAL_SPHERE_COUNT,
             "shot_count": 2,
             "level_range": [0, 2],
             "shot_speed": SHOT_SPEED,
@@ -232,7 +267,6 @@ if __name__ == "__main__":
         ],
     )
 
-    top = sorted(per_level, key=lambda entry: abs(entry[6] - entry[10]), reverse=True)[:TOP_N]
     print(f"\nTop {TOP_N} nach Score-Differenz (greedy/lookahead):")
 
     cells: dict[str, tuple[LevelDefinition, list[tuple[float, float]]]] = {}
@@ -252,14 +286,38 @@ if __name__ == "__main__":
         lookahead_combo,
     ) in top:
         gap = abs(greedy_score - lookahead_score)
+        shrunk_info = shrunk_by_seed.get(seed)
+        shrunk_note = ""
+        if shrunk_info is not None:
+            (
+                shrunk_level,
+                shrunk_greedy_shots,
+                shrunk_greedy_score,
+                shrunk_lookahead_shots,
+                shrunk_lookahead_score,
+            ) = shrunk_info
+            shrunk_gap = abs(shrunk_greedy_score - shrunk_lookahead_score)
+            shrunk_note = (
+                f" -- shrunk {len(shrunk_level.initial_spheres)} spheres/"
+                f"{len(shrunk_level.shot_queue)} shots (gap {shrunk_gap})"
+            )
         print(
             f"  seed {seed}: random={random_score} greedy={greedy_score} "
-            f"lookahead={lookahead_score} (gap {gap}, combo {lookahead_combo})"
+            f"lookahead={lookahead_score} (gap {gap}, combo {lookahead_combo}){shrunk_note}"
         )
 
         level = _build_level(seed)
         cells[f"seed {seed} / random ({random_score})"] = (level, random_shots)
         cells[f"seed {seed} / greedy ({greedy_score})"] = (level, greedy_shots)
         cells[f"seed {seed} / lookahead ({lookahead_score})"] = (level, lookahead_shots)
+        if shrunk_info is not None:
+            cells[f"seed {seed} / shrunk greedy ({shrunk_greedy_score})"] = (
+                shrunk_level,
+                shrunk_greedy_shots,
+            )
+            cells[f"seed {seed} / shrunk lookahead ({shrunk_lookahead_score})"] = (
+                shrunk_level,
+                shrunk_lookahead_shots,
+            )
 
     run_agent_grid(cells, columns=9, render_config=RenderConfig(window_size=(1800, 1000)))
