@@ -46,7 +46,7 @@ class PhysicsConfig:
     """
 
     gravity: float = 9.81
-    friction: float = 0.05
+    friction: float = 0.02
     sphere_restitution: float = 0.9
     boundary_restitution: float = 0.6
     rest_threshold_factor: float = 1.0
@@ -90,7 +90,7 @@ def step(
                 sphere.velocity.z,
             )
 
-    for i, j in find_colliding_pairs(spheres):
+    for i, j in find_colliding_pairs(spheres, moving_threshold=rest_velocity_threshold):
         a, b = spheres[i], spheres[j]
         if not is_colliding(a, b):
             continue

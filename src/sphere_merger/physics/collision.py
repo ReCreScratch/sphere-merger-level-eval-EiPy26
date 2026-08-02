@@ -48,15 +48,31 @@ def is_colliding(a: Sphere, b: Sphere) -> bool:
     return dx * dx + dy * dy + dz * dz < radius_sum * radius_sum
 
 
-def find_colliding_pairs(spheres: list[Sphere]) -> list[tuple[int, int]]:
+def find_colliding_pairs(
+    spheres: list[Sphere], moving_threshold: float = 0.0
+) -> list[tuple[int, int]]:
     """Return index pairs (i, j), i < j, of overlapping spheres in `spheres`.
 
     Pairs are found via a fixed nested loop over list indices, so the result
     depends only on the order of `spheres`, never on set/dict iteration order.
+
+    A pair is skipped without checking `is_colliding` if *both* spheres are
+    slower than `moving_threshold` (default 0.0 -- every pair is checked,
+    unchanged behavior): two resting spheres can't spontaneously start
+    overlapping on their own, so if neither has moved since it last had a
+    chance to newly overlap something, re-checking it is wasted work. Once a
+    resting sphere is actually disturbed (e.g. hit by a moving one), its own
+    velocity rises above the threshold and it's included again from the very
+    next call. This is the dominant simulation cost (an O(n^2) scan every
+    physics step) per profiling with 5-6 spheres.
     """
+    threshold_squared = moving_threshold * moving_threshold
+    moving = [sphere.velocity.dot(sphere.velocity) >= threshold_squared for sphere in spheres]
     pairs = []
     for i in range(len(spheres)):
         for j in range(i + 1, len(spheres)):
+            if not moving[i] and not moving[j]:
+                continue
             if is_colliding(spheres[i], spheres[j]):
                 pairs.append((i, j))
     return pairs

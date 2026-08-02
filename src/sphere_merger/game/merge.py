@@ -56,6 +56,12 @@ def resolve_merges(spheres: list[Sphere]) -> list[int]:
     Returns the resulting level of each merge, in processing order (for
     e.g. combo scoring -- one entry per merge, first merge in the shot
     first).
+
+    Deliberately does not use `find_colliding_pairs`'s `moving_threshold`
+    (unlike `physics.engine.step`'s own bounce-resolution call): merges are
+    the scoring-relevant outcome, not just physics smoothness, so this
+    checks every pair every call rather than risking a resting same-level
+    pair silently never being noticed as touching.
     """
     already_merged: set[int] = set()
     to_remove: set[int] = set()
