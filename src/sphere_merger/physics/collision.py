@@ -91,11 +91,10 @@ def contact_normal(a: Sphere, b: Sphere) -> Vector2:
 def resolve_overlap(a: Sphere, b: Sphere) -> None:
     """Push two overlapping spheres apart along their connecting axis.
 
-    Mutates `a.position` and `b.position` in place. The correction is
-    mass-weighted so the lighter sphere moves proportionally more.
+    Mutates `a.position` and `b.position` in place. No mass concept (see
+    `Sphere`'s docstring), so the correction is split evenly between both.
     """
     normal = contact_normal(a, b)
     overlap = a.radius + b.radius - distance(a, b)
-    total_mass = a.mass + b.mass
-    a.position = a.position - normal * (overlap * (b.mass / total_mass))
-    b.position = b.position + normal * (overlap * (a.mass / total_mass))
+    a.position = a.position - normal * (overlap * 0.5)
+    b.position = b.position + normal * (overlap * 0.5)

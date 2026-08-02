@@ -55,15 +55,6 @@ struct SphereState {
     level: i64,
 }
 
-impl SphereState {
-    fn mass(&self) -> f64 {
-        // powf (general real pow, matching Python's `radius ** 3`), not
-        // powi (exact repeated multiplication) -- they can differ in the
-        // last bit, see docs/physics_optimizations.md.
-        self.radius.powf(3.0)
-    }
-}
-
 struct BoundaryState {
     x_min: f64,
     x_max: f64,
@@ -109,28 +100,30 @@ fn contact_normal(a: &SphereState, b: &SphereState) -> Vec2 {
     }
 }
 
+/// No mass concept (see Python's `Sphere` docstring), so the overlap
+/// correction is split evenly between both spheres.
 fn resolve_overlap(a: &mut SphereState, b: &mut SphereState) {
     let normal = contact_normal(a, b);
     let overlap = a.radius + b.radius - distance(a, b);
-    let total_mass = a.mass() + b.mass();
-    a.pos = a.pos.sub(normal.scale(overlap * (b.mass() / total_mass)));
-    b.pos = b.pos.add(normal.scale(overlap * (a.mass() / total_mass)));
+    a.pos = a.pos.sub(normal.scale(overlap * 0.5));
+    b.pos = b.pos.add(normal.scale(overlap * 0.5));
 }
 
-/// Impulse-based collision response along the contact normal. No "resting
-/// contact" special case (unlike the old 3D/gravity model): without
-/// gravity, nothing continuously re-drives two touching spheres back
-/// together, so a normal restitution-scaled bounce simply loses energy
-/// each time and settles on its own.
+/// Impulse-based collision response along the contact normal. No mass
+/// concept, so this is the standard equal-mass impulse formula. No
+/// "resting contact" special case (unlike the old 3D/gravity model):
+/// without gravity, nothing continuously re-drives two touching spheres
+/// back together, so a normal restitution-scaled bounce simply loses
+/// energy each time and settles on its own.
 fn resolve_velocity(a: &mut SphereState, b: &mut SphereState, restitution: f64) {
     let normal = contact_normal(a, b);
     let approach_speed = a.vel.sub(b.vel).dot(normal);
     if approach_speed <= 0.0 {
         return;
     }
-    let impulse = (1.0 + restitution) * approach_speed / (1.0 / a.mass() + 1.0 / b.mass());
-    a.vel = a.vel.sub(normal.scale(impulse / a.mass()));
-    b.vel = b.vel.add(normal.scale(impulse / b.mass()));
+    let impulse = (1.0 + restitution) * approach_speed / 2.0;
+    a.vel = a.vel.sub(normal.scale(impulse));
+    b.vel = b.vel.add(normal.scale(impulse));
 }
 
 /// Every wall is treated the same way: if the sphere's surface would cross
@@ -267,16 +260,16 @@ fn default_merge_score(new_level: i64, combo_index: i64) -> i64 {
     2i64.pow(new_level as u32) * combo_index
 }
 
-/// `game/merge.py::merge_spheres` -- mass/momentum-weighted combination of
-/// two same-level spheres into one at `level + 1`. `radius_for_level`
+/// `game/merge.py::merge_spheres` -- combination of two same-level spheres
+/// into one at `level + 1`. Position/velocity are the plain average (no
+/// mass concept, see Python's `Sphere` docstring). `radius_for_level`
 /// currently returns a fixed `base_radius` regardless of level (see its
-/// docstring -- a deliberate, temporary simplification), so that's what's
-/// passed in here rather than reimplementing level-dependent sizing.
+/// docstring -- a deliberate simplification), so that's what's passed in
+/// here rather than reimplementing level-dependent sizing.
 fn merge_spheres(a: &SphereState, b: &SphereState, base_radius: f64) -> SphereState {
-    let new_mass = a.mass() + b.mass();
     SphereState {
-        pos: a.pos.scale(a.mass()).add(b.pos.scale(b.mass())).scale(1.0 / new_mass),
-        vel: a.vel.scale(a.mass()).add(b.vel.scale(b.mass())).scale(1.0 / new_mass),
+        pos: a.pos.add(b.pos).scale(0.5),
+        vel: a.vel.add(b.vel).scale(0.5),
         radius: base_radius,
         level: a.level + 1,
     }

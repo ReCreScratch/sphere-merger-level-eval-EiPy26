@@ -11,7 +11,13 @@ from sphere_merger.physics.vector import Vector2
 class Sphere:
     """A single physics body in the simulation.
 
-    >>> Sphere(Vector2(0.0, 0.0), Vector2(0.0, 0.0), radius=1.0, level=0).mass
+    No mass: every sphere counts equally in collisions/merges (uniform
+    radius everywhere anyway, see `game.level.radius_for_level`'s
+    docstring) -- so a per-sphere mass would only ever be a constant, not
+    real information. Solvers that used to be mass-weighted (overlap push,
+    collision impulse, merge averaging) are equal-split instead.
+
+    >>> Sphere(Vector2(0.0, 0.0), Vector2(0.0, 0.0), radius=1.0, level=0).radius
     1.0
     """
 
@@ -25,8 +31,3 @@ class Sphere:
             raise ValueError(f"radius must be positive, got {self.radius}")
         if self.level < 0:
             raise ValueError(f"level must be non-negative, got {self.level}")
-
-    @property
-    def mass(self) -> float:
-        """Mass derived from volume (radius cubed)."""
-        return self.radius**3

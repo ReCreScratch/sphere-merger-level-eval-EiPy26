@@ -172,10 +172,12 @@ def _resolve_velocity(a: Sphere, b: Sphere, restitution: float) -> None:
     """Impulse-based collision response along the contact normal.
 
     Tangential velocity is left untouched (no spin/friction in collisions).
-    No "resting contact" special case here (unlike the old 3D/gravity
-    model): without gravity, nothing continuously re-drives two touching
-    spheres back together, so a normal restitution-scaled bounce simply
-    loses energy each time and settles on its own.
+    No mass concept (see `Sphere`'s docstring), so this is the standard
+    equal-mass impulse formula, split evenly between both spheres. No
+    "resting contact" special case here (unlike the old 3D/gravity model):
+    without gravity, nothing continuously re-drives two touching spheres
+    back together, so a normal restitution-scaled bounce simply loses
+    energy each time and settles on its own.
     """
     normal = contact_normal(a, b)
 
@@ -183,6 +185,6 @@ def _resolve_velocity(a: Sphere, b: Sphere, restitution: float) -> None:
     if approach_speed <= 0:
         return
 
-    impulse = (1 + restitution) * approach_speed / (1 / a.mass + 1 / b.mass)
-    a.velocity = a.velocity - normal * (impulse / a.mass)
-    b.velocity = b.velocity + normal * (impulse / b.mass)
+    impulse = (1 + restitution) * approach_speed / 2
+    a.velocity = a.velocity - normal * impulse
+    b.velocity = b.velocity + normal * impulse

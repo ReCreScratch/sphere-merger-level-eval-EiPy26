@@ -18,7 +18,8 @@ FIELD = Boundary(x_min=-10.0, x_max=10.0, y_min=-10.0, y_max=10.0)
 
 
 def _kinetic_energy(*spheres: Sphere) -> float:
-    return sum(0.5 * s.mass * s.velocity.dot(s.velocity) for s in spheres)
+    # No mass concept (see Sphere's docstring) -- unit mass everywhere.
+    return sum(0.5 * s.velocity.dot(s.velocity) for s in spheres)
 
 
 def test_elastic_head_on_collision_conserves_kinetic_energy() -> None:

@@ -26,10 +26,10 @@ def test_merge_spheres_conserves_momentum() -> None:
     a = _sphere(0.0, vx=2.0)
     b = _sphere(0.5, vx=-1.0)
     merged = merge_spheres(a, b)
-    # Velocity is still the mass-weighted average of the inputs' true mass
-    # (radius**3), independent of the merged sphere's own (currently
-    # size-capped) radius/mass.
-    expected_vx = (a.velocity.x * a.mass + b.velocity.x * b.mass) / (a.mass + b.mass)
+    # No mass concept (see Sphere's docstring) -- plain average, which is
+    # momentum-conserving under the implicit assumption every sphere
+    # counts equally.
+    expected_vx = (a.velocity.x + b.velocity.x) / 2
     assert merged.velocity.x == pytest.approx(expected_vx)
 
 

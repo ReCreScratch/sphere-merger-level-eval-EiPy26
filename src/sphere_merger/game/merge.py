@@ -17,13 +17,13 @@ from sphere_merger.physics.sphere import Sphere
 def merge_spheres(a: Sphere, b: Sphere) -> Sphere:
     """Combine two same-level spheres into one sphere at `level + 1`.
 
-    Momentum-conserving (position and velocity are mass-weighted averages
-    of `a` and `b`) -- the merged sphere keeps flying/falling with the
-    combined "Restgeschwindigkeit" instead of snapping to a stop. Radius
-    currently comes from `radius_for_level` (uniform for now, see its
-    docstring) rather than the combined mass -- while that simplification
-    is in place, merged spheres stay the same size as everything else
-    instead of visibly growing with every merge.
+    Position and velocity are the plain average of `a` and `b` -- no mass
+    concept (see `Sphere`'s docstring), so this is momentum-conserving
+    under the implicit assumption that every sphere counts equally. The
+    merged sphere keeps flying with the combined "Restgeschwindigkeit"
+    instead of snapping to a stop. Radius comes from `radius_for_level`
+    (uniform, see its docstring), so merged spheres stay the same size as
+    everything else instead of visibly growing with every merge.
 
     >>> from sphere_merger.physics.vector import Vector2
     >>> a = Sphere(Vector2(0.0, 0.0), Vector2(1.0, 0.0), radius=0.5, level=0)
@@ -36,10 +36,9 @@ def merge_spheres(a: Sphere, b: Sphere) -> Sphere:
     """
     if a.level != b.level:
         raise ValueError(f"can only merge same-level spheres, got levels {a.level} and {b.level}")
-    new_mass = a.mass + b.mass
     new_radius = radius_for_level(a.level + 1)
-    new_position = (a.position * a.mass + b.position * b.mass) * (1 / new_mass)
-    new_velocity = (a.velocity * a.mass + b.velocity * b.mass) * (1 / new_mass)
+    new_position = (a.position + b.position) * 0.5
+    new_velocity = (a.velocity + b.velocity) * 0.5
     return Sphere(new_position, new_velocity, radius=new_radius, level=a.level + 1)
 
 

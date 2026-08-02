@@ -66,8 +66,7 @@ verwendet. `resolve_overlap` hat aber eine Postcondition:
 
 ```python
 @deal.ensure(lambda a, b, result: distance(a, b) >= a.radius + b.radius - OVERLAP_EPSILON)
-def resolve_overlap(a: Sphere, b: Sphere) -> None:
-    ...
+def resolve_overlap(a: Sphere, b: Sphere) -> None: ...
 ```
 
 `OVERLAP_EPSILON = 1e-9` — bewusst sehr eng, weil "nach dem Solver berühren
