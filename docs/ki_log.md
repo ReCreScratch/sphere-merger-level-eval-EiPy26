@@ -159,3 +159,23 @@ abgewichen.
   markiert statt einfach entfernt, damit er als offener Punkt sichtbar
   bleibt und automatisch wieder auffällt (als "unerwartet bestanden"),
   falls der Fix mal nebenbei passiert.
+
+## 2026-08-02
+- Performance-Session zu Agenten-Laufzeit (1000-Level-Batch-Ziel), volles
+  Entscheidungslog in `docs/physics_optimizations.md`. Kurzfassung: `deepcopy`
+  in `simulate_shot` durch gezielten Klon ersetzt (~12%), `deal`-Contracts
+  in Batch-Läufen abgeschaltet (~2-3%), Winkelauflösung/Alpha-Pruning
+  bewusst abgelehnt (Combo-Scoring verhindert eine sinnvolle Schranke).
+  Erster Perf-Vergleich war fehlerhaft (`git stash` mischte versehentlich
+  einen unabhängigen älteren Lookahead-Stand rein) -- korrigiert durch
+  isolierten Vergleich, im Doc als Lehre festgehalten.
+- Beim 20-Level-Timing-Test (neues `scripts/agent_batch_timing.py`) einen
+  echten Bug gefunden statt gesucht: `GreedyAgent`s Tiebreak-Fallback
+  (greift bei Gain-Gleichstand) lief ohne `executor`, obwohl er bei vielen
+  Ties denselben teuren 2-Ply-Sweep macht wie Lookahead -- einzelne Level
+  brauchten dadurch bis zu 20s statt <1s. Nutzer-eigener Testlauf deckte
+  das auf, nicht Analyse im Voraus.
+- `game/interesting_levels.py` (neu): schema-agnostischer JSON-Store für
+  Level, bei denen Agenten-Scores stark divergieren -- speichert nur Seed
+  + Generierungsparameter (Determinismus macht Neuspeichern des Levels
+  selbst unnötig).
