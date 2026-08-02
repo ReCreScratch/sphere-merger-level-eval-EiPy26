@@ -20,20 +20,15 @@ def _without_sphere(level: LevelDefinition, index: int) -> LevelDefinition:
     return replace(level, initial_spheres=spheres)
 
 
-def _without_last_shot(level: LevelDefinition) -> LevelDefinition:
-    return replace(level, shot_queue=level.shot_queue[:-1])
-
-
 def shrink_level(level: LevelDefinition, is_interesting: IsInteresting) -> LevelDefinition:
-    """Repeatedly simplify `level` -- drop one initial sphere or shorten the
-    shot queue by one -- as long as `is_interesting` still holds on the
-    result.
+    """Repeatedly drop one initial sphere at a time, as long as
+    `is_interesting` still holds on the result.
 
-    Greedy delta-debugging: on each pass, tries every single-step
-    simplification and keeps the first one that preserves
-    `is_interesting`, then starts over from there. Stops once no single
-    simplification preserves it anymore (a local minimum, not necessarily
-    the smallest possible level).
+    Greedy delta-debugging: on each pass, tries removing every single
+    sphere and keeps the first removal that preserves `is_interesting`,
+    then starts over from there. Stops once no single removal preserves it
+    anymore (a local minimum, not necessarily the smallest possible level).
+    The shot queue is never touched -- only the initial field layout.
 
     `level` itself must already satisfy `is_interesting` -- not re-checked
     here, since callers already know this (e.g. it's the level they just
@@ -50,13 +45,5 @@ def shrink_level(level: LevelDefinition, is_interesting: IsInteresting) -> Level
                 current = candidate
                 shrank = True
                 break
-        if shrank:
-            continue
-
-        if len(current.shot_queue) > 1:
-            candidate = _without_last_shot(current)
-            if is_interesting(candidate):
-                current = candidate
-                shrank = True
 
     return current

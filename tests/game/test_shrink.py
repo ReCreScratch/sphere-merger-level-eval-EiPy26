@@ -28,29 +28,18 @@ def test_shrink_level_drops_spheres_down_to_the_predicates_floor() -> None:
     assert len(shrunk.initial_spheres) == 2
 
 
-def test_shrink_level_shortens_shot_queue_down_to_the_predicates_floor() -> None:
-    level = _level(sphere_count=1, shot_count=4)
-
-    shrunk = shrink_level(level, is_interesting=lambda lvl: len(lvl.shot_queue) >= 2)
-
-    assert len(shrunk.shot_queue) == 2
-
-
-def test_shrink_level_drops_unrelated_spheres_entirely_when_predicate_allows() -> None:
+def test_shrink_level_never_touches_the_shot_queue() -> None:
     level = _level(sphere_count=3, shot_count=3)
-
-    shrunk = shrink_level(level, is_interesting=lambda lvl: len(lvl.shot_queue) >= 2)
-
-    assert len(shrunk.initial_spheres) == 0
-    assert len(shrunk.shot_queue) == 2
-
-
-def test_shrink_level_reaches_the_hard_floor_when_predicate_never_objects() -> None:
-    # shot_queue can't go below 1 (LevelDefinition rejects an empty one);
-    # initial_spheres has no such floor.
-    level = _level(sphere_count=2, shot_count=1)
 
     shrunk = shrink_level(level, is_interesting=lambda _lvl: True)
 
     assert len(shrunk.initial_spheres) == 0
-    assert len(shrunk.shot_queue) == 1
+    assert len(shrunk.shot_queue) == 3
+
+
+def test_shrink_level_is_a_no_op_when_no_sphere_can_be_dropped() -> None:
+    level = _level(sphere_count=2, shot_count=1)
+
+    shrunk = shrink_level(level, is_interesting=lambda lvl: len(lvl.initial_spheres) >= 2)
+
+    assert len(shrunk.initial_spheres) == 2
