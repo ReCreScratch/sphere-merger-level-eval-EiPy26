@@ -18,20 +18,12 @@ window opens.
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 import pygame
 
 from sphere_merger.game.level import LevelDefinition
-from sphere_merger.game.round import (
-    DT,
-    RoundState,
-    advance_physics,
-    is_settled,
-    settle,
-    spawn_shot,
-    start_round,
-)
+from sphere_merger.game.round import DT, ShotReplay
 from sphere_merger.rendering.renderer import (
     FIELD_OUTLINE_COLOR,
     LOSE_COLOR,
@@ -48,57 +40,13 @@ LABEL_COLOR = (220, 220, 220)
 
 
 @dataclass
-class _Cell:
+class _Cell(ShotReplay):
     """One named (level, agent) combination's own round, playback position
-    and on-screen area."""
+    and on-screen area -- `ShotReplay` plus grid-specific display fields."""
 
     label: str
-    level: LevelDefinition
-    shots: list[tuple[float, float]]
     viewport: Viewport
     outline: pygame.Rect
-    state: RoundState = field(init=False)
-    shot_index: int = field(init=False, default=0)
-    combo_index: int = field(init=False, default=0)
-
-    def __post_init__(self) -> None:
-        self.state = start_round(self.level)
-
-    def reset(self) -> None:
-        self.state = start_round(self.level)
-        self.shot_index = 0
-        self.combo_index = 0
-
-    @property
-    def settled(self) -> bool:
-        return is_settled(self.state.spheres)
-
-    def spawn_next_shot(self) -> None:
-        """Spawn the next recorded shot, if the round isn't over and any are left."""
-        if not self.state.is_over and self.shot_index < len(self.shots):
-            angle, speed = self.shots[self.shot_index]
-            spawn_shot(self.state, angle, speed)
-            self.shot_index += 1
-            self.combo_index = 0
-
-    def step_physics(self, dt: float) -> None:
-        """Advance the current shot by one frame; if that frame brings it
-        below the settle threshold, zero the residual velocity immediately
-        (see `game.round.settle`'s docstring) instead of on some later call.
-
-        Checking and settling in the same call (like `game.round.play_shot`
-        does) matters here: `run_agent_grid`'s main loop stops calling this
-        once every cell reports `settled`, so a `settle()` that only fires
-        on a *later* call (the previous version's `else` branch) would
-        never actually run -- the just-barely-sub-threshold velocity from
-        the frame settling was first detected would carry over, unzeroed,
-        into the next shot instead of starting it from a genuine rest.
-        """
-        if self.settled:
-            return
-        self.combo_index, _ = advance_physics(self.state, self.combo_index, dt=dt)
-        if self.settled:
-            settle(self.state.spheres)
 
 
 def _draw_cell_hud(

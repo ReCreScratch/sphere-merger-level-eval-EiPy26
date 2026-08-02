@@ -205,3 +205,62 @@ def play_shot(
             break
 
     return merged_levels
+
+
+@dataclass
+class ShotReplay:
+    """Steps a `RoundState` through a fixed, precomputed list of
+    (angle, speed) shots -- e.g. one recorded via `agents.runner.record_shots`
+    -- one call at a time, instead of asking an agent live.
+
+    Shared by every "replay a recorded playthrough" view (grid, single-level
+    browser) so the check-and-settle atomicity in `step_physics` (see its
+    docstring) only has to be right in one place -- a previous, per-view
+    copy of this same logic had that atomicity broken in exactly one of its
+    two copies (see docs/physics_optimizations.md), which a second
+    hand-duplicated copy would have been just as easy to get wrong again.
+    """
+
+    level: LevelDefinition
+    shots: list[tuple[float, float]]
+    state: RoundState = field(init=False)
+    shot_index: int = field(init=False, default=0)
+    combo_index: int = field(init=False, default=0)
+
+    def __post_init__(self) -> None:
+        self.state = start_round(self.level)
+
+    def reset(self) -> None:
+        self.state = start_round(self.level)
+        self.shot_index = 0
+        self.combo_index = 0
+
+    @property
+    def settled(self) -> bool:
+        return is_settled(self.state.spheres)
+
+    def spawn_next_shot(self) -> None:
+        """Spawn the next recorded shot, if the round isn't over and any are left."""
+        if not self.state.is_over and self.shot_index < len(self.shots):
+            angle, speed = self.shots[self.shot_index]
+            spawn_shot(self.state, angle, speed)
+            self.shot_index += 1
+            self.combo_index = 0
+
+    def step_physics(self, dt: float = DT) -> None:
+        """Advance the current shot by one frame; if that frame brings it
+        below the settle threshold, zero the residual velocity immediately
+        (see `settle`'s docstring) instead of on some later call.
+
+        Checking and settling in the same call matters: a caller's main
+        loop typically stops stepping once `settled` is reported, so a
+        `settle()` that only fires on a *later* call would never actually
+        run -- the just-barely-sub-threshold velocity from the frame
+        settling was first detected would carry over, unzeroed, into the
+        next shot instead of starting it from genuine rest.
+        """
+        if self.settled:
+            return
+        self.combo_index, _ = advance_physics(self.state, self.combo_index, dt=dt)
+        if self.settled:
+            settle(self.state.spheres)

@@ -112,7 +112,7 @@ def field_rect(boundary: Boundary, viewport: Viewport) -> pygame.Rect:
     )
 
 
-def _sphere_at_screen_pos(
+def sphere_at_screen_pos(
     spheres: list[Sphere], pos: tuple[int, int], boundary: Boundary, viewport: Viewport
 ) -> Sphere | None:
     """Topmost (last-drawn) sphere whose circle contains `pos`, if any."""
@@ -275,7 +275,7 @@ def run(
                     spheres[:] = _random_scenario(boundary, render_config.random_sphere_count)
                     initial_spheres = copy.deepcopy(spheres)
                 else:
-                    drag_sphere = _sphere_at_screen_pos(spheres, event.pos, boundary, viewport)
+                    drag_sphere = sphere_at_screen_pos(spheres, event.pos, boundary, viewport)
                     drag_start = event.pos
             elif (
                 event.type == pygame.MOUSEBUTTONUP and event.button == 1 and drag_sphere is not None
