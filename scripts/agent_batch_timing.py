@@ -13,22 +13,30 @@ from __future__ import annotations
 
 import time
 from concurrent.futures import ProcessPoolExecutor
+from contextlib import nullcontext
 from datetime import date
+from typing import Literal
 
 import pygame
 
 from sphere_merger.agents.greedy_agent import GreedyAgent
 from sphere_merger.agents.lookahead_agent import LookaheadAgent
-from sphere_merger.agents.runner import disable_contracts_in_worker, record_playthrough
+from sphere_merger.agents.runner import (
+    disable_contracts_in_worker,
+    prepare_native_batch_worker,
+    record_playthrough,
+)
 from sphere_merger.game.interesting_levels import save_level
 from sphere_merger.game.level import LevelDefinition, generate_random_level, radius_for_level
 from sphere_merger.physics.boundary import Boundary
+from sphere_merger.physics.engine import native_backend
 from sphere_merger.physics.vector import Vector3
 from sphere_merger.rendering.agent_grid import run_agent_grid
 from sphere_merger.rendering.renderer import RenderConfig
 
+BACKEND: Literal["python", "rust"] = "rust"
 TOP_N = 3
-SOURCE_SCRIPT = "agent_batch_timing.py"
+SOURCE_SCRIPT = f"agent_batch_timing.py[{BACKEND}]"
 
 FIELD = Boundary(x_min=-6.0, x_max=6.0, y_min=-6.0, y_max=6.0, z_min=0.0)
 SPAWN_MARGIN = 1.0
@@ -87,7 +95,10 @@ if __name__ == "__main__":
     last_elapsed = 0.0
     _draw_progress(screen, font, 0, LEVEL_COUNT, last_elapsed)
 
-    with ProcessPoolExecutor(initializer=disable_contracts_in_worker) as executor:
+    worker_init = prepare_native_batch_worker if BACKEND == "rust" else disable_contracts_in_worker
+    main_process_backend = native_backend() if BACKEND == "rust" else nullcontext()
+
+    with ProcessPoolExecutor(initializer=worker_init) as executor, main_process_backend:
         greedy = GreedyAgent(speed=SHOT_SPEED, executor=executor)
         lookahead = LookaheadAgent(speed=SHOT_SPEED, executor=executor)
 
@@ -145,7 +156,15 @@ if __name__ == "__main__":
 
     found_at = date.today().isoformat()
     cells: dict[str, tuple[LevelDefinition, list[tuple[float, float]]]] = {}
-    for seed, _, greedy_score, greedy_shots, _, lookahead_score, lookahead_shots in top:
+    for (
+        seed,
+        _t_greedy,
+        greedy_score,
+        greedy_shots,
+        _t_lookahead,
+        lookahead_score,
+        lookahead_shots,
+    ) in top:
         gap = abs(greedy_score - lookahead_score)
         print(f"  seed {seed}: greedy={greedy_score} lookahead={lookahead_score} (gap {gap})")
 

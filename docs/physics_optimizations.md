@@ -104,3 +104,29 @@ statt tausender einzelner Python-Aufrufe.
   Crate) baut via `maturin develop` und importiert aus dem Projekt-venv
   (`ping() -> "pong"`) -- Pipeline steht, physikalische Portierung folgt
   als nächster Schritt.
+- **`physics.engine.step` portiert** (`step_native`), Parity-Test
+  (`tests/physics/test_native_step_parity.py`, überspringt sich selbst
+  ohne gebaute Extension) bestätigt Übereinstimmung mit der Python-Version
+  -- aber nicht bit-exakt, sondern nur bis auf Float-Toleranz (`rel_tol`/
+  `abs_tol` 1e-9): `Sphere.mass` (`radius ** 3`) läuft über Pythons `pow`
+  (MSVC-CRT) bzw. Rusts `powf` (MinGW-libm) -- anders als +/-/*// /sqrt ist
+  `pow` nicht IEEE754-korrekt-gerundet vorgeschrieben, beide Seiten können
+  im letzten Bit abweichen. Betrifft nur beliebige Radien (von Hypothesis
+  generiert); im echten Spiel liefert `radius_for_level` aktuell konstant
+  0.5, `0.5**3` ist exakt (Zweierpotenz), keine Rundung möglich -- daher
+  praktisch irrelevant, solange die Uniform-Radius-Vereinfachung steht.
+  Geschwindigkeit pro einzelnem `step()`-Aufruf: nur ~2.2x (53.6k vs.
+  119.9k Schritte/s) -- FFI-Marshaling-Overhead dominiert bei einem
+  einzelnen Schritt pro Aufruf, der eigentliche Hebel kommt erst, wenn die
+  ganze Settle-Schleife in einem Aufruf läuft (noch nicht umgesetzt).
+- **Backend-Toggle:** `physics.engine.native_backend()` (Kontextmanager)
+  bzw. `enable_native_backend()` (Dauerhaft, für Worker-Prozesse) -- ein
+  globaler Prozess-Schalter, kein durchgereichter Parameter (analog zu
+  `deal`s Schalter), da ein Parameter durch `advance_physics`, `play_shot`,
+  `simulate_shot`, alle Agenten und den Runner hätte durchgezogen werden
+  müssen. `agents.runner.prepare_native_batch_worker` kombiniert
+  `deal`-Abschaltung + natives Backend als ein `ProcessPoolExecutor`-
+  `initializer`. `collision_filter` kann nicht als Callback über die FFI-
+  Grenze -- wird zu einem Bool kollabiert ("nicht None" = "gleiches Level
+  ausschließen", die einzige tatsächlich genutzte Filterbedeutung im
+  Projekt).

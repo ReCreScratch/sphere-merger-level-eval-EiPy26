@@ -70,5 +70,77 @@
     "lookahead_score": 42,
     "gap": 26,
     "found_at": "2026-08-02"
+  },
+  {
+    "seed": 9,
+    "source_script": "agent_batch_timing.py[rust]",
+    "field": {
+      "x_min": -6.0,
+      "x_max": 6.0,
+      "y_min": -6.0,
+      "y_max": 6.0,
+      "z_min": 0.0
+    },
+    "spawn_margin": 1.0,
+    "target_score": 999,
+    "initial_sphere_count": 6,
+    "shot_count": 2,
+    "level_range": [
+      0,
+      2
+    ],
+    "shot_speed": 20.0,
+    "greedy_score": 20,
+    "lookahead_score": 38,
+    "gap": 18,
+    "found_at": "2026-08-02"
+  },
+  {
+    "seed": 15,
+    "source_script": "agent_batch_timing.py[rust]",
+    "field": {
+      "x_min": -6.0,
+      "x_max": 6.0,
+      "y_min": -6.0,
+      "y_max": 6.0,
+      "z_min": 0.0
+    },
+    "spawn_margin": 1.0,
+    "target_score": 999,
+    "initial_sphere_count": 6,
+    "shot_count": 2,
+    "level_range": [
+      0,
+      2
+    ],
+    "shot_speed": 20.0,
+    "greedy_score": 10,
+    "lookahead_score": 32,
+    "gap": 22,
+    "found_at": "2026-08-02"
+  },
+  {
+    "seed": 17,
+    "source_script": "agent_batch_timing.py[rust]",
+    "field": {
+      "x_min": -6.0,
+      "x_max": 6.0,
+      "y_min": -6.0,
+      "y_max": 6.0,
+      "z_min": 0.0
+    },
+    "spawn_margin": 1.0,
+    "target_score": 999,
+    "initial_sphere_count": 6,
+    "shot_count": 2,
+    "level_range": [
+      0,
+      2
+    ],
+    "shot_speed": 20.0,
+    "greedy_score": 16,
+    "lookahead_score": 42,
+    "gap": 26,
+    "found_at": "2026-08-02"
   }
 ]
