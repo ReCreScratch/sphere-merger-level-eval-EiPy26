@@ -209,13 +209,16 @@ def _resolve_velocity(
     """Impulse-based collision response along the contact normal.
 
     Tangential velocity is left untouched (no spin/friction in collisions).
-    Below `rest_velocity_threshold`, the collision is treated as resting
-    contact (fully inelastic along the normal) rather than a bounce. This
-    matters for stacked spheres: gravity re-drives the same tiny approach
-    speed into the contact every step (like it does at the floor), and
-    without a rest case, that would jitter forever instead of settling --
+    At or below `rest_velocity_threshold`, the collision is treated as
+    resting contact (fully inelastic along the normal) rather than a bounce.
+    This matters for stacked spheres: gravity re-drives the same tiny
+    approach speed into the contact every step (like it does at the floor),
+    and without a rest case, that would jitter forever instead of settling --
     the same discretization artifact `resolve_boundary`'s
-    `rest_velocity_threshold` already guards against.
+    `rest_velocity_threshold` already guards against, including the same
+    `<=` vs `<` edge case (see its docstring): with the default
+    `rest_threshold_factor = 1.0`, one step of freefall from an exactly
+    resting pair lands exactly on the threshold, not strictly below it.
     """
     normal = contact_normal(a, b)
 
@@ -223,7 +226,7 @@ def _resolve_velocity(
     if approach_speed <= 0:
         return
 
-    effective_restitution = 0.0 if approach_speed < rest_velocity_threshold else restitution
+    effective_restitution = 0.0 if approach_speed <= rest_velocity_threshold else restitution
     impulse = (1 + effective_restitution) * approach_speed / (1 / a.mass + 1 / b.mass)
     a.velocity = a.velocity - normal * (impulse / a.mass)
     b.velocity = b.velocity + normal * (impulse / b.mass)

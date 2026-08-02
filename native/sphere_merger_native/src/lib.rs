@@ -144,7 +144,7 @@ fn resolve_velocity(
         return;
     }
     let effective_restitution =
-        if approach_speed < rest_velocity_threshold { 0.0 } else { restitution };
+        if approach_speed <= rest_velocity_threshold { 0.0 } else { restitution };
     let impulse = (1.0 + effective_restitution) * approach_speed / (1.0 / a.mass() + 1.0 / b.mass());
     a.vel = a.vel.sub(normal.scale(impulse / a.mass()));
     b.vel = b.vel.add(normal.scale(impulse / b.mass()));
@@ -162,27 +162,27 @@ fn resolve_boundary(
 
     if x - r < boundary.x_min {
         x = boundary.x_min + r;
-        vx = if vx.abs() < rest_velocity_threshold { 0.0 } else { -vx * restitution };
+        vx = if vx.abs() <= rest_velocity_threshold { 0.0 } else { -vx * restitution };
     } else if x + r > boundary.x_max {
         x = boundary.x_max - r;
-        vx = if vx.abs() < rest_velocity_threshold { 0.0 } else { -vx * restitution };
+        vx = if vx.abs() <= rest_velocity_threshold { 0.0 } else { -vx * restitution };
     }
 
     if y - r < boundary.y_min {
         y = boundary.y_min + r;
-        vy = if vy.abs() < rest_velocity_threshold { 0.0 } else { -vy * restitution };
+        vy = if vy.abs() <= rest_velocity_threshold { 0.0 } else { -vy * restitution };
     } else if y + r > boundary.y_max {
         y = boundary.y_max - r;
-        vy = if vy.abs() < rest_velocity_threshold { 0.0 } else { -vy * restitution };
+        vy = if vy.abs() <= rest_velocity_threshold { 0.0 } else { -vy * restitution };
     }
 
     if z - r < boundary.z_min {
         z = boundary.z_min + r;
-        vz = if vz.abs() < rest_velocity_threshold { 0.0 } else { -vz * restitution };
+        vz = if vz.abs() <= rest_velocity_threshold { 0.0 } else { -vz * restitution };
     } else if let Some(z_max) = boundary.z_max {
         if z + r > z_max {
             z = z_max - r;
-            vz = if vz.abs() < rest_velocity_threshold { 0.0 } else { -vz * restitution };
+            vz = if vz.abs() <= rest_velocity_threshold { 0.0 } else { -vz * restitution };
         }
     }
 
