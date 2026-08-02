@@ -5,12 +5,13 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from contextlib import contextmanager
+from dataclasses import replace
 
 import deal
 
 from sphere_merger.agents.base import Agent
 from sphere_merger.game.level import LevelDefinition
-from sphere_merger.game.round import RoundState, play_shot, start_round
+from sphere_merger.game.round import RoundState, play_shot, start_round, touched_sphere_indices
 from sphere_merger.physics.engine import enable_native_backend
 
 
@@ -101,3 +102,36 @@ def record_playthrough(
 def record_shots(level: LevelDefinition, agent: Agent) -> list[tuple[float, float]]:
     """Like `record_playthrough`, but for callers that only need the shots."""
     return record_playthrough(level, agent)[0]
+
+
+def shrink_to_used_spheres(level: LevelDefinition, agents: list[Agent]) -> LevelDefinition:
+    """Iteratively drop initial spheres that none of `agents` ever touch.
+
+    Re-simulates fresh after every removal pass -- dropping a sphere can
+    change which shots an agent picks on the smaller field, so a
+    touched-set computed before the drop can't be trusted for what comes
+    after (see docs/level_shrinking.md). Keeps going until a pass finds
+    nothing left to drop.
+
+    Cheap by construction: one run per agent per pass, not one run per
+    single-sphere trial like the earlier gap-preserving search this
+    replaced -- practical to run over an entire batch, not just its most
+    divergent seeds. Doesn't check whether the score gap changed at all: a
+    shrinking gap here just means the level was easier than its original
+    score suggested, not a failure -- and an agent finding a genuinely
+    different, better strategy on the smaller field is an accepted side
+    effect, never searched for.
+    """
+    current = level
+    while True:
+        touched: set[int] = set()
+        for agent in agents:
+            shots = record_shots(current, agent)
+            touched |= touched_sphere_indices(current, shots)
+
+        untouched = set(range(len(current.initial_spheres))) - touched
+        if not untouched:
+            return current
+
+        spheres = [sphere for i, sphere in enumerate(current.initial_spheres) if i not in untouched]
+        current = replace(current, initial_spheres=spheres)

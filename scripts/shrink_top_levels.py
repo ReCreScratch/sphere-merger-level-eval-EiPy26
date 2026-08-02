@@ -1,28 +1,33 @@
 """Shrink the seeds with the biggest greedy/lookahead score gap (read from
-data/interesting_levels.json, see agent_batch_timing.py) and save the
-before/after results to their own dataset -- a shrunk level's sphere/shot
-counts and gap are a different kind of record (before vs. after) than the
-plain per-seed scores there, not just another column on the same table.
+data/interesting_levels.json, see agent_batch_timing.py) by dropping every
+initial sphere neither agent ever touches (see
+agents.runner.shrink_to_used_spheres), and save the before/after results
+to their own dataset -- a shrunk level's sphere counts and gap are a
+different kind of record (before vs. after) than the plain per-seed
+scores there, not just another column on the same table.
 
 TOP_N controls how many of the highest-gap seeds to shrink (set it to
-len(levels) to shrink the whole batch instead of just the top slice) --
-run with a small TOP_N first to gauge per-level shrink time before
-committing to a full run.
+len(candidates) to shrink the whole batch instead of just the top slice)
+-- shrink_to_used_spheres is cheap enough (a few agent-pair runs per
+level, not one per single-sphere trial) that this is practical even at
+that scale.
 """
 
 from __future__ import annotations
 
 import time
-from collections.abc import Callable
 from concurrent.futures import ProcessPoolExecutor
 from pathlib import Path
 
 from sphere_merger.agents.greedy_agent import GreedyAgent
 from sphere_merger.agents.lookahead_agent import LookaheadAgent
-from sphere_merger.agents.runner import prepare_native_batch_worker, record_playthrough
+from sphere_merger.agents.runner import (
+    prepare_native_batch_worker,
+    record_playthrough,
+    shrink_to_used_spheres,
+)
 from sphere_merger.game.interesting_levels import load_run, save_run
 from sphere_merger.game.level import LevelDefinition, generate_random_level
-from sphere_merger.game.shrink import shrink_level
 from sphere_merger.physics.boundary import Boundary
 from sphere_merger.physics.engine import native_backend
 from sphere_merger.physics.vector import Vector2
@@ -60,25 +65,38 @@ if __name__ == "__main__":
         greedy = GreedyAgent(speed=SHOT_SPEED, executor=executor)
         lookahead = LookaheadAgent(speed=SHOT_SPEED, executor=executor)
 
-        def _gap(level: LevelDefinition) -> int:
-            _gs, greedy_score, _gc = record_playthrough(level, greedy)
-            _ls, lookahead_score, _lc = record_playthrough(level, lookahead)
-            return abs(greedy_score - lookahead_score)
-
-        def _at_least_as_divergent(baseline_gap: int) -> Callable[[LevelDefinition], bool]:
-            return lambda lvl: _gap(lvl) >= baseline_gap
-
         results = []
         total_start = time.perf_counter()
         for entry in candidates:
             seed = entry["seed"]
-            baseline_gap = entry["gap"]
             original = _build_level(seed)
 
             start = time.perf_counter()
-            shrunk = shrink_level(original, is_interesting=_at_least_as_divergent(baseline_gap))
+            shrunk = shrink_to_used_spheres(original, [greedy, lookahead])
             elapsed = time.perf_counter() - start
-            shrunk_gap = _gap(shrunk)
+
+            # Which of the original level's spheres survived, by identity --
+            # shrink_to_used_spheres only ever drops spheres (never mutates
+            # or reorders the survivors), so this is an exact, cheap way to
+            # rebuild the shrunk layout from the seed alone later, instead
+            # of re-running the shrink.
+            kept_ids = {id(sphere) for sphere in shrunk.initial_spheres}
+            kept_sphere_indices = [
+                i for i, sphere in enumerate(original.initial_spheres) if id(sphere) in kept_ids
+            ]
+
+            original_greedy_shots, original_greedy_score, _ogc = record_playthrough(
+                original, greedy
+            )
+            original_lookahead_shots, original_lookahead_score, _olc = record_playthrough(
+                original, lookahead
+            )
+            shrunk_greedy_shots, shrunk_greedy_score, _sgc = record_playthrough(shrunk, greedy)
+            shrunk_lookahead_shots, shrunk_lookahead_score, _slc = record_playthrough(
+                shrunk, lookahead
+            )
+            baseline_gap = abs(original_greedy_score - original_lookahead_score)
+            shrunk_gap = abs(shrunk_greedy_score - shrunk_lookahead_score)
 
             print(
                 f"seed {seed:>4}: {len(original.initial_spheres):>2} -> "
@@ -95,6 +113,15 @@ if __name__ == "__main__":
                     "spheres_removed": len(original.initial_spheres) - len(shrunk.initial_spheres),
                     "gap_increase": shrunk_gap - baseline_gap,
                     "shrink_seconds": elapsed,
+                    "kept_sphere_indices": kept_sphere_indices,
+                    "original_greedy_score": original_greedy_score,
+                    "original_lookahead_score": original_lookahead_score,
+                    "shrunk_greedy_score": shrunk_greedy_score,
+                    "shrunk_lookahead_score": shrunk_lookahead_score,
+                    "original_greedy_shots": original_greedy_shots,
+                    "original_lookahead_shots": original_lookahead_shots,
+                    "shrunk_greedy_shots": shrunk_greedy_shots,
+                    "shrunk_lookahead_shots": shrunk_lookahead_shots,
                 }
             )
 
@@ -110,6 +137,18 @@ if __name__ == "__main__":
             "source_script": "shrink_top_levels.py",
             "shrunk_from": "data/interesting_levels.json",
             "top_n": TOP_N,
+            "field": {
+                "x_min": FIELD.x_min,
+                "x_max": FIELD.x_max,
+                "y_min": FIELD.y_min,
+                "y_max": FIELD.y_max,
+            },
+            "spawn_margin": SPAWN_MARGIN,
+            "target_score": 999,
+            "initial_sphere_count": INITIAL_SPHERE_COUNT,
+            "shot_count": 2,
+            "level_range": [0, 2],
+            "shot_speed": SHOT_SPEED,
         },
         levels=results,
         path=OUTPUT_PATH,

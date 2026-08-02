@@ -207,6 +207,43 @@ def play_shot(
     return merged_levels
 
 
+def touched_sphere_indices(level: LevelDefinition, shots: list[tuple[float, float]]) -> set[int]:
+    """Which of `level.initial_spheres`, by index, get merged away or start
+    moving at some point during a full playthrough of `shots`.
+
+    Tracks by object identity against a snapshot of `state.spheres` taken
+    right after `start_round` -- not `level.initial_spheres` itself:
+    `start_round` deep-copies, so even a genuinely untouched sphere is
+    never the same object as the one in `level.initial_spheres`, and
+    comparing against that would report everything as "merged" regardless
+    of what actually happened (a real bug hit once, see
+    docs/level_shrinking.md).
+
+    The complement of the returned set are exactly the spheres a caller
+    can drop without having affected this specific playthrough at all --
+    the basis for `agents.runner.shrink_to_used_spheres`.
+    """
+    state = start_round(level)
+    initial_spheres = list(state.spheres)
+    initial_positions = [(s.position.x, s.position.y) for s in initial_spheres]
+    for angle_degrees, speed in shots:
+        play_shot(state, angle_degrees, speed)
+
+    touched: set[int] = set()
+    for i, sphere in enumerate(initial_spheres):
+        still_present = any(s is sphere for s in state.spheres)
+        if not still_present:
+            touched.add(i)
+            continue
+        moved = (sphere.position.x, sphere.position.y) != initial_positions[i] or (
+            sphere.velocity.x,
+            sphere.velocity.y,
+        ) != (0.0, 0.0)
+        if moved:
+            touched.add(i)
+    return touched
+
+
 @dataclass
 class ShotReplay:
     """Steps a `RoundState` through a fixed, precomputed list of

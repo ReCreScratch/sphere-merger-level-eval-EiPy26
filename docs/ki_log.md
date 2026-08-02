@@ -179,3 +179,23 @@ abgewichen.
   Level, bei denen Agenten-Scores stark divergieren -- speichert nur Seed
   + Generierungsparameter (Determinismus macht Neuspeichern des Levels
   selbst unnötig).
+- Combo-Ketten-Metrik (`agents/runner.py::record_playthrough`) und
+  Level-Shrinking ergänzt, volles Entscheidungslog zum Shrinking in
+  `docs/level_shrinking.md`. Kurzfassung: erster Ansatz (Delta-Debug mit
+  Gap-Erhaltung) zu teuer (~11-13s/Level) und konnte Level durch eine
+  komplett andere, bessere Agenten-Strategie "verbessern" statt sie nur zu
+  verkleinern. Beim Anschauen im eigens gebauten Level-Browser
+  (`rendering/level_browser.py`) fiel eine scheinbar nie getroffene Kugel
+  auf, die trotzdem nicht entfernt wurde -- erste eigene Diagnose kam
+  fälschlich zum Schluss, es gäbe nie unberührte Kugeln (Bug: Identitätsvergleich
+  gegen die falsche Objektliste, `start_round` deep-copied). Nutzer hatte
+  recht; nach Fix bestätigt, aber gezeigt, dass "unberührt vom gewählten
+  Schuss" nicht "irrelevant" heißt (Entfernen kann eine andere,
+  bessere Strategie freilegen). Auf Nutzer-Entscheidung durch einen
+  neuen, deutlich günstigeren Ansatz ersetzt: Kugeln entfernen, die
+  kein "cleverer" Agent (alles außer Random) je berührt, iterativ bis
+  zum Fixpunkt -- keine Gap-Erhaltung mehr als Kriterium, ein sinkender
+  Gap gilt als informativ ("Level war leichter als gedacht"), keine
+  Suche nach besseren Alternativ-Strategien mehr. Alter Ansatz (`game/shrink.py`,
+  zugehörige Tests, `scripts/shrink_interesting_level.py`, alte
+  `data/shrunk_levels.json`) komplett gelöscht statt parallel gehalten.

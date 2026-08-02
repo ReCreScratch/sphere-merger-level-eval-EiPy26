@@ -1,7 +1,13 @@
 import pytest
 
 from sphere_merger.game.level import LevelDefinition, radius_for_level
-from sphere_merger.game.round import RoundState, play_shot, settle, start_round
+from sphere_merger.game.round import (
+    RoundState,
+    play_shot,
+    settle,
+    start_round,
+    touched_sphere_indices,
+)
 from sphere_merger.physics.boundary import Boundary
 from sphere_merger.physics.sphere import Sphere
 from sphere_merger.physics.vector import Vector2
@@ -117,3 +123,27 @@ def test_play_shot_leaves_a_settled_shot_at_true_rest() -> None:
     play_shot(state, angle_degrees=0.0, speed=0.0)
 
     assert all(sphere.velocity == Vector2(0.0, 0.0) for sphere in state.spheres)
+
+
+def test_touched_sphere_indices_finds_merged_and_leaves_out_untouched() -> None:
+    radius = radius_for_level(0)
+    level = LevelDefinition(
+        boundary=FIELD,
+        initial_spheres=[
+            Sphere(Vector2(0.0, 0.0), Vector2(0.0, 0.0), radius, level=0),  # gets merged
+            Sphere(Vector2(-4.0, -4.0), Vector2(0.0, 0.0), radius, level=0),  # stays put
+        ],
+        shot_queue=[0],
+        spawn_position=Vector2(0.9, 0.0),
+        target_score=100,
+    )
+
+    touched = touched_sphere_indices(level, shots=[(0.0, 0.0)])
+
+    assert touched == {0}
+
+
+def test_touched_sphere_indices_is_empty_without_any_shots() -> None:
+    level = _far_apart_level()
+
+    assert touched_sphere_indices(level, shots=[]) == set()
