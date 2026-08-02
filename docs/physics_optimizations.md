@@ -73,3 +73,34 @@ Score-Gap aus dem 20er-Lauf gespeichert: Seed 17 (Gap 26), 15 (Gap 22),
 9 (Gap 18).
 
 **Offen:** 1000-Level-Lauf.
+
+## 2026-08-02 (Fortsetzung): native Beschleunigung (Rust statt C++/GPU)
+
+Nach B/C/D/E bleibt die O(N²)-Struktur der Lookahead-Suche der Haupt-
+kostenpunkt; Profiling zeigt den Löwenanteil als reinen Python-Interpreter-
+Overhead über tausende `step()`-Aufrufe pro `choose_shot`. Nächster Hebel:
+die komplette Settle-Schleife (`simulate_shot`) als eine native Funktion
+statt tausender einzelner Python-Aufrufe.
+
+- **GPU verworfen:** zu wenige Kugeln/Schritt, Kernel-Launch-Overhead
+  dominiert. Würde nur bei Batch-Vektorisierung vieler Kandidaten als ein
+  Tensor-Op lohnen -- das ist ein Physik-Neubau, kein Umbau.
+- **Rust statt C++:** auf Windows braucht ein C++-Python-Extension
+  (pybind11) praktisch MSVC/Visual-Studio-Build-Tools (mehrere GB,
+  systemweit). Rust hat über `rustup` einen GNU-Host-Target
+  (`x86_64-pc-windows-gnu`) mit eigenem Linker, keine VS-Abhängigkeit.
+  Dazu: PyO3/`maturin` ergonomischer als pybind11/CMake, memory-safe ohne
+  GC (relevant in einer Float-Hot-Loop).
+- **Toolchain projekt-lokal:** `rustup`/`cargo` über `RUSTUP_HOME`/
+  `CARGO_HOME` in `native/`-nahes `.toolchain/` (gitignored) statt
+  systemweit -- kein Admin, nichts global registriert, Ordner löschen
+  entfernt alles. Setup-Doku: `README.md`.
+- **Additiv, kein Ersatz:** Python-Physik bleibt Standardpfad und
+  Referenz-Implementierung (auch fürs Determinismus-Testing gegen die
+  native Version noetig). Rust wird über einen `backend`-Parameter
+  zuschaltbar (analog zum bestehenden `executor`-Opt-in-Muster der
+  Agenten), Default bleibt Python.
+- **Machbarkeits-Slice erledigt:** `native/sphere_merger_native/` (PyO3-
+  Crate) baut via `maturin develop` und importiert aus dem Projekt-venv
+  (`ping() -> "pong"`) -- Pipeline steht, physikalische Portierung folgt
+  als nächster Schritt.
