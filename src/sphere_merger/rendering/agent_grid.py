@@ -82,11 +82,22 @@ class _Cell:
             self.combo_index = 0
 
     def step_physics(self, dt: float) -> None:
-        """Advance the current shot by one frame, or settle it exactly once
-        it's slow enough (see `game.round.settle`'s docstring)."""
-        if not self.settled:
-            self.combo_index, _ = advance_physics(self.state, self.combo_index, dt=dt)
-        else:
+        """Advance the current shot by one frame; if that frame brings it
+        below the settle threshold, zero the residual velocity immediately
+        (see `game.round.settle`'s docstring) instead of on some later call.
+
+        Checking and settling in the same call (like `game.round.play_shot`
+        does) matters here: `run_agent_grid`'s main loop stops calling this
+        once every cell reports `settled`, so a `settle()` that only fires
+        on a *later* call (the previous version's `else` branch) would
+        never actually run -- the just-barely-sub-threshold velocity from
+        the frame settling was first detected would carry over, unzeroed,
+        into the next shot instead of starting it from a genuine rest.
+        """
+        if self.settled:
+            return
+        self.combo_index, _ = advance_physics(self.state, self.combo_index, dt=dt)
+        if self.settled:
             settle(self.state.spheres)
 
 
