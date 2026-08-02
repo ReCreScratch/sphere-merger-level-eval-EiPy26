@@ -86,8 +86,10 @@ if __name__ == "__main__":
             _draw_search_progress(screen, font, seed, SEED_COUNT, seed)
 
             level = _build_level(seed)
-            greedy_shots, greedy_score = record_playthrough(level, greedy)
-            lookahead_shots, lookahead_score = record_playthrough(level, lookahead)
+            greedy_shots, greedy_score, _greedy_combo = record_playthrough(level, greedy)
+            lookahead_shots, lookahead_score, _lookahead_combo = record_playthrough(
+                level, lookahead
+            )
             gap = abs(lookahead_score - greedy_score)
             if gap > best_gap:
                 best_gap = gap

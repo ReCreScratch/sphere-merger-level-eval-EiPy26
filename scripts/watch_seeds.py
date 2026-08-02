@@ -42,8 +42,10 @@ if __name__ == "__main__":
         cells = {}
         for seed in SEEDS:
             level = _build_level(seed)
-            greedy_shots, greedy_score = record_playthrough(level, greedy)
-            lookahead_shots, lookahead_score = record_playthrough(level, lookahead)
+            greedy_shots, greedy_score, _greedy_combo = record_playthrough(level, greedy)
+            lookahead_shots, lookahead_score, _lookahead_combo = record_playthrough(
+                level, lookahead
+            )
             print(f"seed {seed}: greedy={greedy_score} lookahead={lookahead_score}")
             cells[f"seed {seed} / greedy ({greedy_score})"] = (level, greedy_shots)
             cells[f"seed {seed} / lookahead ({lookahead_score})"] = (level, lookahead_shots)

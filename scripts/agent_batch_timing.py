@@ -95,9 +95,12 @@ if __name__ == "__main__":
     font = pygame.font.Font(None, 22)
 
     Shots = list[tuple[float, float]]
-    per_level: list[tuple[int, float, int, Shots, float, int, Shots, float, int, Shots]] = []
-    # seed, t_random, s_random, random_shots, t_greedy, s_greedy, greedy_shots,
-    # t_lookahead, s_lookahead, lookahead_shots
+    PerLevel = tuple[int, float, int, Shots, int, float, int, Shots, int, float, int, Shots, int]
+    per_level: list[PerLevel] = []
+    # seed, t_random, s_random, random_shots, random_combo, t_greedy, s_greedy,
+    # greedy_shots, greedy_combo, t_lookahead, s_lookahead, lookahead_shots,
+    # lookahead_combo -- combo is the longest single-shot merge chain (see
+    # agents.runner.record_playthrough).
     last_elapsed = 0.0
     _draw_progress(screen, font, 0, LEVEL_COUNT, last_elapsed)
 
@@ -121,15 +124,15 @@ if __name__ == "__main__":
             level = _build_level(seed)
 
             start = time.perf_counter()
-            random_shots, random_score = record_playthrough(level, random_agent)
+            random_shots, random_score, random_combo = record_playthrough(level, random_agent)
             t_random = time.perf_counter() - start
 
             start = time.perf_counter()
-            greedy_shots, greedy_score = record_playthrough(level, greedy)
+            greedy_shots, greedy_score, greedy_combo = record_playthrough(level, greedy)
             t_greedy = time.perf_counter() - start
 
             start = time.perf_counter()
-            lookahead_shots, lookahead_score = record_playthrough(level, lookahead)
+            lookahead_shots, lookahead_score, lookahead_combo = record_playthrough(level, lookahead)
             t_lookahead = time.perf_counter() - start
 
             last_elapsed = t_random + t_greedy + t_lookahead
@@ -139,12 +142,15 @@ if __name__ == "__main__":
                     t_random,
                     random_score,
                     random_shots,
+                    random_combo,
                     t_greedy,
                     greedy_score,
                     greedy_shots,
+                    greedy_combo,
                     t_lookahead,
                     lookahead_score,
                     lookahead_shots,
+                    lookahead_combo,
                 )
             )
             _draw_progress(screen, font, seed + 1, LEVEL_COUNT, last_elapsed)
@@ -155,38 +161,45 @@ if __name__ == "__main__":
 
     print(
         f"{'seed':>4}  {'random':>6}  {'t_greedy':>9}  {'greedy':>6}  "
-        f"{'t_lookahead':>11}  {'lookahead':>9}"
+        f"{'t_lookahead':>11}  {'lookahead':>9}  {'combo':>5}"
     )
     for (
         seed,
         _t_random,
         random_score,
         _random_shots,
+        _random_combo,
         t_greedy,
         greedy_score,
         _greedy_shots,
+        _greedy_combo,
         t_lookahead,
         lookahead_score,
         _lookahead_shots,
+        lookahead_combo,
     ) in per_level:
         print(
             f"{seed:>4}  {random_score:>6}  {t_greedy:>8.2f}s  {greedy_score:>6}  "
-            f"{t_lookahead:>10.2f}s  {lookahead_score:>9}"
+            f"{t_lookahead:>10.2f}s  {lookahead_score:>9}  {lookahead_combo:>5}"
         )
 
-    avg_lookahead = sum(entry[7] for entry in per_level) / LEVEL_COUNT
+    avg_lookahead = sum(entry[9] for entry in per_level) / LEVEL_COUNT
     print(f"\n{LEVEL_COUNT} Level in {total_elapsed:.1f}s gesamt")
     est_1000_min = avg_lookahead * 1000 / 60
     print(f"lookahead: {avg_lookahead:.2f}s/Level -> ~{est_1000_min:.0f} min fuer 1000 Level")
 
-    gaps = [abs(entry[5] - entry[8]) for entry in per_level]
+    gaps = [abs(entry[6] - entry[10]) for entry in per_level]
     print(
         f"gap (greedy/lookahead): avg {sum(gaps) / len(gaps):.2f}, min {min(gaps)}, max {max(gaps)}"
     )
-    random_gaps = [entry[8] - entry[2] for entry in per_level]
+    random_gaps = [entry[10] - entry[2] for entry in per_level]
     print(
         f"gap (random/lookahead): avg {sum(random_gaps) / len(random_gaps):.2f}, "
         f"min {min(random_gaps)}, max {max(random_gaps)}"
+    )
+    max_combos = [entry[12] for entry in per_level]
+    print(
+        f"lookahead max combo: avg {sum(max_combos) / len(max_combos):.2f}, max {max(max_combos)}"
     )
 
     save_run(
@@ -210,15 +223,16 @@ if __name__ == "__main__":
             {
                 "seed": entry[0],
                 "random_score": entry[2],
-                "greedy_score": entry[5],
-                "lookahead_score": entry[8],
-                "gap": abs(entry[5] - entry[8]),
+                "greedy_score": entry[6],
+                "lookahead_score": entry[10],
+                "gap": abs(entry[6] - entry[10]),
+                "lookahead_max_combo": entry[12],
             }
             for entry in per_level
         ],
     )
 
-    top = sorted(per_level, key=lambda entry: abs(entry[5] - entry[8]), reverse=True)[:TOP_N]
+    top = sorted(per_level, key=lambda entry: abs(entry[6] - entry[10]), reverse=True)[:TOP_N]
     print(f"\nTop {TOP_N} nach Score-Differenz (greedy/lookahead):")
 
     cells: dict[str, tuple[LevelDefinition, list[tuple[float, float]]]] = {}
@@ -227,17 +241,20 @@ if __name__ == "__main__":
         _t_random,
         random_score,
         random_shots,
+        _random_combo,
         _t_greedy,
         greedy_score,
         greedy_shots,
+        _greedy_combo,
         _t_lookahead,
         lookahead_score,
         lookahead_shots,
+        lookahead_combo,
     ) in top:
         gap = abs(greedy_score - lookahead_score)
         print(
             f"  seed {seed}: random={random_score} greedy={greedy_score} "
-            f"lookahead={lookahead_score} (gap {gap})"
+            f"lookahead={lookahead_score} (gap {gap}, combo {lookahead_combo})"
         )
 
         level = _build_level(seed)

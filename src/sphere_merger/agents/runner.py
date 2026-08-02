@@ -73,22 +73,29 @@ def play_round(level: LevelDefinition, agent: Agent) -> RoundState:
 
 def record_playthrough(
     level: LevelDefinition, agent: Agent
-) -> tuple[list[tuple[float, float]], int]:
+) -> tuple[list[tuple[float, float]], int, int]:
     """Play `level` with `agent`, recording each chosen (angle, speed) shot
-    alongside the final score.
+    alongside the final score and the longest combo chain seen.
 
     For replaying a playthrough later (e.g. animated in a rendered grid)
     without needing the agent -- or its per-shot candidate simulation --
     live at render time.
+
+    The combo chain is the number of merges triggered by a single shot
+    (`play_shot`'s return value); the longest one across the whole
+    playthrough is a proxy for "did any one shot set off a big cascade" --
+    0 if no shot ever merged anything.
     """
     state = start_round(level)
     shots: list[tuple[float, float]] = []
+    max_combo = 0
     with contracts_disabled():
         while not state.is_over:
             angle, speed = agent.choose_shot(state)
             shots.append((angle, speed))
-            play_shot(state, angle, speed)
-    return shots, state.score
+            merged_levels = play_shot(state, angle, speed)
+            max_combo = max(max_combo, len(merged_levels))
+    return shots, state.score, max_combo
 
 
 def record_shots(level: LevelDefinition, agent: Agent) -> list[tuple[float, float]]:
