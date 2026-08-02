@@ -89,7 +89,7 @@ class PhysicsConfig:
             until the sphere settles.
     """
 
-    friction: float = 0.0075
+    friction: float = 0.0175
     sphere_restitution: float = 0.9
     boundary_restitution: float = 0.6
 
