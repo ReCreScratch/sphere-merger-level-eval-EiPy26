@@ -1,10 +1,13 @@
-"""Timing check: play LEVEL_COUNT random levels with greedy and lookahead,
-each timed individually, to measure whether/how far a much larger batch
-(the eventual goal: ~1000 levels) is practical. Saves minimal info (seed +
-scores, not shots) for every level played -- enough to revisit any of them
-later, not just the standouts -- to the interesting-levels store.
-Afterwards, replays the top TOP_N by greedy/lookahead score gap side by
-side.
+"""Timing check: play LEVEL_COUNT random levels with random, greedy and
+lookahead, each timed individually, to measure whether/how far a much
+larger batch (the eventual goal: ~1000 levels) is practical. Random is the
+difficulty baseline this project's core question needs (README: how hard
+is a level, judged by how far above chance an informed agent gets) --
+greedy/lookahead alone only measure the gap between two informed
+strategies, not distance from chance. Saves minimal info (seed + scores,
+not shots) for every level played -- enough to revisit any of them later,
+not just the standouts -- to the interesting-levels store. Afterwards,
+replays the top TOP_N by greedy/lookahead score gap side by side.
 
 Progress bar (pygame, same pattern as demo_find_divergence_live.py) is
 drawn once per level, not per simulation step -- negligible next to the
@@ -23,6 +26,7 @@ import pygame
 
 from sphere_merger.agents.greedy_agent import GreedyAgent
 from sphere_merger.agents.lookahead_agent import LookaheadAgent
+from sphere_merger.agents.random_agent import RandomAgent
 from sphere_merger.agents.runner import (
     disable_contracts_in_worker,
     prepare_native_batch_worker,
@@ -43,8 +47,9 @@ SOURCE_SCRIPT = f"agent_batch_timing.py[{BACKEND}]"
 FIELD = Boundary(x_min=-6.0, x_max=6.0, y_min=-6.0, y_max=6.0)
 SPAWN_MARGIN = 1.0
 SPAWN = Vector2(FIELD.x_min + SPAWN_MARGIN, FIELD.y_min + SPAWN_MARGIN)
-SHOT_SPEED = 20.0
-LEVEL_COUNT = 250
+SHOT_SPEED = 25.0
+RANDOM_SEED = 0
+LEVEL_COUNT = 1000
 
 WINDOW_SIZE = (900, 300)
 BAR_COLOR = (90, 160, 220)
@@ -58,7 +63,7 @@ def _build_level(seed: int) -> LevelDefinition:
         boundary=FIELD,
         spawn_position=SPAWN,
         target_score=999,
-        initial_sphere_count=5,
+        initial_sphere_count=6,
         shot_count=2,
         level_range=(0, 2),
     )
@@ -90,8 +95,9 @@ if __name__ == "__main__":
     font = pygame.font.Font(None, 22)
 
     Shots = list[tuple[float, float]]
-    per_level: list[tuple[int, float, int, Shots, float, int, Shots]] = []
-    # seed, t_greedy, s_greedy, greedy_shots, t_lookahead, s_lookahead, lookahead_shots
+    per_level: list[tuple[int, float, int, Shots, float, int, Shots, float, int, Shots]] = []
+    # seed, t_random, s_random, random_shots, t_greedy, s_greedy, greedy_shots,
+    # t_lookahead, s_lookahead, lookahead_shots
     last_elapsed = 0.0
     _draw_progress(screen, font, 0, LEVEL_COUNT, last_elapsed)
 
@@ -99,6 +105,7 @@ if __name__ == "__main__":
     main_process_backend = native_backend() if BACKEND == "rust" else nullcontext()
 
     with ProcessPoolExecutor(initializer=worker_init) as executor, main_process_backend:
+        random_agent = RandomAgent(seed=RANDOM_SEED, speed=SHOT_SPEED)
         greedy = GreedyAgent(speed=SHOT_SPEED, executor=executor)
         lookahead = LookaheadAgent(speed=SHOT_SPEED, executor=executor)
 
@@ -114,6 +121,10 @@ if __name__ == "__main__":
             level = _build_level(seed)
 
             start = time.perf_counter()
+            random_shots, random_score = record_playthrough(level, random_agent)
+            t_random = time.perf_counter() - start
+
+            start = time.perf_counter()
             greedy_shots, greedy_score = record_playthrough(level, greedy)
             t_greedy = time.perf_counter() - start
 
@@ -121,10 +132,13 @@ if __name__ == "__main__":
             lookahead_shots, lookahead_score = record_playthrough(level, lookahead)
             t_lookahead = time.perf_counter() - start
 
-            last_elapsed = t_greedy + t_lookahead
+            last_elapsed = t_random + t_greedy + t_lookahead
             per_level.append(
                 (
                     seed,
+                    t_random,
+                    random_score,
+                    random_shots,
                     t_greedy,
                     greedy_score,
                     greedy_shots,
@@ -139,20 +153,41 @@ if __name__ == "__main__":
 
     pygame.quit()
 
-    print(f"{'seed':>4}  {'t_greedy':>9}  {'greedy':>6}  {'t_lookahead':>11}  {'lookahead':>9}")
-    for seed, t_greedy, greedy_score, _, t_lookahead, lookahead_score, _ in per_level:
+    print(
+        f"{'seed':>4}  {'random':>6}  {'t_greedy':>9}  {'greedy':>6}  "
+        f"{'t_lookahead':>11}  {'lookahead':>9}"
+    )
+    for (
+        seed,
+        _t_random,
+        random_score,
+        _random_shots,
+        t_greedy,
+        greedy_score,
+        _greedy_shots,
+        t_lookahead,
+        lookahead_score,
+        _lookahead_shots,
+    ) in per_level:
         print(
-            f"{seed:>4}  {t_greedy:>8.2f}s  {greedy_score:>6}  "
+            f"{seed:>4}  {random_score:>6}  {t_greedy:>8.2f}s  {greedy_score:>6}  "
             f"{t_lookahead:>10.2f}s  {lookahead_score:>9}"
         )
 
-    avg_lookahead = sum(t for _, _, _, _, t, _, _ in per_level) / LEVEL_COUNT
+    avg_lookahead = sum(entry[7] for entry in per_level) / LEVEL_COUNT
     print(f"\n{LEVEL_COUNT} Level in {total_elapsed:.1f}s gesamt")
     est_1000_min = avg_lookahead * 1000 / 60
     print(f"lookahead: {avg_lookahead:.2f}s/Level -> ~{est_1000_min:.0f} min fuer 1000 Level")
 
-    gaps = [abs(entry[2] - entry[5]) for entry in per_level]
-    print(f"gap: avg {sum(gaps) / len(gaps):.2f}, min {min(gaps)}, max {max(gaps)}")
+    gaps = [abs(entry[5] - entry[8]) for entry in per_level]
+    print(
+        f"gap (greedy/lookahead): avg {sum(gaps) / len(gaps):.2f}, min {min(gaps)}, max {max(gaps)}"
+    )
+    random_gaps = [entry[8] - entry[2] for entry in per_level]
+    print(
+        f"gap (random/lookahead): avg {sum(random_gaps) / len(random_gaps):.2f}, "
+        f"min {min(random_gaps)}, max {max(random_gaps)}"
+    )
 
     save_run(
         meta={
@@ -165,7 +200,7 @@ if __name__ == "__main__":
             },
             "spawn_margin": SPAWN_MARGIN,
             "target_score": 999,
-            "initial_sphere_count": 5,
+            "initial_sphere_count": 6,
             "shot_count": 2,
             "level_range": [0, 2],
             "shot_speed": SHOT_SPEED,
@@ -173,21 +208,25 @@ if __name__ == "__main__":
         },
         levels=[
             {
-                "seed": seed,
-                "greedy_score": greedy_score,
-                "lookahead_score": lookahead_score,
-                "gap": abs(greedy_score - lookahead_score),
+                "seed": entry[0],
+                "random_score": entry[2],
+                "greedy_score": entry[5],
+                "lookahead_score": entry[8],
+                "gap": abs(entry[5] - entry[8]),
             }
-            for seed, _, greedy_score, _, _, lookahead_score, _ in per_level
+            for entry in per_level
         ],
     )
 
-    top = sorted(per_level, key=lambda entry: abs(entry[2] - entry[5]), reverse=True)[:TOP_N]
-    print(f"\nTop {TOP_N} nach Score-Differenz:")
+    top = sorted(per_level, key=lambda entry: abs(entry[5] - entry[8]), reverse=True)[:TOP_N]
+    print(f"\nTop {TOP_N} nach Score-Differenz (greedy/lookahead):")
 
     cells: dict[str, tuple[LevelDefinition, list[tuple[float, float]]]] = {}
     for (
         seed,
+        _t_random,
+        random_score,
+        random_shots,
         _t_greedy,
         greedy_score,
         greedy_shots,
@@ -196,10 +235,14 @@ if __name__ == "__main__":
         lookahead_shots,
     ) in top:
         gap = abs(greedy_score - lookahead_score)
-        print(f"  seed {seed}: greedy={greedy_score} lookahead={lookahead_score} (gap {gap})")
+        print(
+            f"  seed {seed}: random={random_score} greedy={greedy_score} "
+            f"lookahead={lookahead_score} (gap {gap})"
+        )
 
         level = _build_level(seed)
+        cells[f"seed {seed} / random ({random_score})"] = (level, random_shots)
         cells[f"seed {seed} / greedy ({greedy_score})"] = (level, greedy_shots)
         cells[f"seed {seed} / lookahead ({lookahead_score})"] = (level, lookahead_shots)
 
-    run_agent_grid(cells, columns=6, render_config=RenderConfig(window_size=(1800, 1000)))
+    run_agent_grid(cells, columns=9, render_config=RenderConfig(window_size=(1800, 1000)))
