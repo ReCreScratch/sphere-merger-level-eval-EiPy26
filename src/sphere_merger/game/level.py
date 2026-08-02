@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 from sphere_merger.physics.boundary import Boundary
 from sphere_merger.physics.engine import PhysicsConfig
 from sphere_merger.physics.sphere import Sphere
-from sphere_merger.physics.vector import Vector3
+from sphere_merger.physics.vector import Vector2
 
 BASE_RADIUS = 0.5
 _MAX_PLACEMENT_ATTEMPTS = 500
@@ -63,7 +63,7 @@ class LevelDefinition:
     boundary: Boundary
     initial_spheres: list[Sphere]
     shot_queue: list[int]
-    spawn_position: Vector3
+    spawn_position: Vector2
     target_score: int
     physics_config: PhysicsConfig = field(default_factory=PhysicsConfig)
     seed: int | None = None
@@ -79,8 +79,8 @@ class LevelDefinition:
 
 def _non_overlapping_position(
     rng: random.Random, boundary: Boundary, radius: float, placed: list[Sphere]
-) -> Vector3:
-    """A resting-height x/y position that doesn't overlap any of `placed`.
+) -> Vector2:
+    """A position that doesn't overlap any of `placed`.
 
     Rejection sampling: keeps drawing candidates from `rng` until one
     clears every already-placed sphere, so a generated level starts from a
@@ -92,11 +92,10 @@ def _non_overlapping_position(
             `_MAX_PLACEMENT_ATTEMPTS` tries (the field is too small/crowded
             for the requested sphere count and sizes).
     """
-    z = boundary.z_min + radius
     for _ in range(_MAX_PLACEMENT_ATTEMPTS):
         x = rng.uniform(boundary.x_min + radius, boundary.x_max - radius)
         y = rng.uniform(boundary.y_min + radius, boundary.y_max - radius)
-        candidate = Vector3(x, y, z)
+        candidate = Vector2(x, y)
         if all((candidate - other.position).length() >= radius + other.radius for other in placed):
             return candidate
     raise ValueError(
@@ -109,7 +108,7 @@ def _non_overlapping_position(
 def generate_random_level(
     seed: int,
     boundary: Boundary,
-    spawn_position: Vector3,
+    spawn_position: Vector2,
     target_score: int,
     initial_sphere_count: int,
     shot_count: int,
@@ -123,8 +122,8 @@ def generate_random_level(
     random state elsewhere in the process -- the same `seed` and parameters
     always produce the exact same level.
 
-    >>> field_ = Boundary(-5.0, 5.0, -5.0, 5.0, 0.0)
-    >>> spawn = Vector3(0.0, 0.0, 3.0)
+    >>> field_ = Boundary(-5.0, 5.0, -5.0, 5.0)
+    >>> spawn = Vector2(0.0, 0.0)
     >>> a = generate_random_level(42, field_, spawn, 100, 5, 10)
     >>> b = generate_random_level(42, field_, spawn, 100, 5, 10)
     >>> a == b
@@ -138,7 +137,7 @@ def generate_random_level(
         level = rng.randint(min_level, max_level)
         radius = radius_for_level(level)
         position = _non_overlapping_position(rng, boundary, radius, initial_spheres)
-        initial_spheres.append(Sphere(position, Vector3(0.0, 0.0, 0.0), radius=radius, level=level))
+        initial_spheres.append(Sphere(position, Vector2(0.0, 0.0), radius=radius, level=level))
 
     shot_queue = [rng.randint(min_level, max_level) for _ in range(shot_count)]
 

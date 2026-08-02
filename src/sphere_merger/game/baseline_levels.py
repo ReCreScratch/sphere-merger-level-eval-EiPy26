@@ -17,19 +17,15 @@ from __future__ import annotations
 from sphere_merger.game.level import LevelDefinition, radius_for_level
 from sphere_merger.physics.boundary import Boundary
 from sphere_merger.physics.sphere import Sphere
-from sphere_merger.physics.vector import Vector3
+from sphere_merger.physics.vector import Vector2
 
-_FIELD = Boundary(x_min=-6.0, x_max=6.0, y_min=-6.0, y_max=6.0, z_min=0.0)
+_FIELD = Boundary(x_min=-6.0, x_max=6.0, y_min=-6.0, y_max=6.0)
 _SPAWN_MARGIN = 1.0
-_SPAWN = Vector3(
-    _FIELD.x_min + _SPAWN_MARGIN, _FIELD.y_min + _SPAWN_MARGIN, _FIELD.z_min + radius_for_level(0)
-)
+_SPAWN = Vector2(_FIELD.x_min + _SPAWN_MARGIN, _FIELD.y_min + _SPAWN_MARGIN)
 
 
 def _sphere(x: float, y: float, level: int) -> Sphere:
-    return Sphere(
-        Vector3(x, y, _SPAWN.z), Vector3(0.0, 0.0, 0.0), radius=radius_for_level(level), level=level
-    )
+    return Sphere(Vector2(x, y), Vector2(0.0, 0.0), radius=radius_for_level(level), level=level)
 
 
 # Five level-0 spheres spread every ~20 degrees across the reachable 0-90

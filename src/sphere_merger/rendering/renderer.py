@@ -23,7 +23,7 @@ from sphere_merger.game.shooting import shoot
 from sphere_merger.physics.boundary import Boundary
 from sphere_merger.physics.engine import PhysicsConfig, step
 from sphere_merger.physics.sphere import Sphere
-from sphere_merger.physics.vector import Vector3
+from sphere_merger.physics.vector import Vector2
 
 MAX_PREVIEW_STEPS = 400
 
@@ -35,13 +35,7 @@ LEVEL_COLORS = [
     (170, 100, 220),
     (240, 140, 60),
 ]
-SHADOW_COLOR = (40, 40, 40)
 LABEL_COLOR = (20, 20, 20)
-SHADOW_MAX_SCALE = 0.9
-SHADOW_MIN_SCALE = 0.25
-SHADOW_HEIGHT_FALLOFF = 3.0
-SHADOW_FLATTEN = 0.5
-SHADOW_CENTER_LIFT = 0.15
 BUTTON_COLOR = (60, 60, 80)
 BUTTON_HOVER_COLOR = (90, 90, 120)
 BUTTON_TEXT_COLOR = (230, 230, 230)
@@ -118,36 +112,14 @@ def field_rect(boundary: Boundary, viewport: Viewport) -> pygame.Rect:
     )
 
 
-def shadow_radius_px(radius_px: int, height_above_ground: float) -> int:
-    """Shadow size for a sphere at `height_above_ground` (world units).
-
-    Shrinks as the sphere rises, down to a floor of `SHADOW_MIN_SCALE` so it
-    never fully disappears.
-
-    >>> shadow_radius_px(100, 0.0)
-    90
-    >>> shadow_radius_px(100, 0.0) > shadow_radius_px(100, 3.0)
-    True
-    """
-    scale = max(
-        SHADOW_MAX_SCALE / (1 + height_above_ground / SHADOW_HEIGHT_FALLOFF), SHADOW_MIN_SCALE
-    )
-    return max(int(radius_px * scale), 1)
-
-
-def _sphere_screen_center(
-    sphere: Sphere, boundary: Boundary, viewport: Viewport
-) -> tuple[int, int]:
-    ground_x, ground_y = _world_to_screen(sphere.position.x, sphere.position.y, boundary, viewport)
-    return ground_x, ground_y - int(sphere.position.z * viewport.scale)
-
-
 def _sphere_at_screen_pos(
     spheres: list[Sphere], pos: tuple[int, int], boundary: Boundary, viewport: Viewport
 ) -> Sphere | None:
-    """Topmost sphere whose drawn circle contains `pos`, if any."""
+    """Topmost (last-drawn) sphere whose circle contains `pos`, if any."""
     for sphere in reversed(spheres):
-        center_x, center_y = _sphere_screen_center(sphere, boundary, viewport)
+        center_x, center_y = _world_to_screen(
+            sphere.position.x, sphere.position.y, boundary, viewport
+        )
         radius_px = max(int(sphere.radius * viewport.scale), 2)
         dx, dy = pos[0] - center_x, pos[1] - center_y
         if dx * dx + dy * dy <= radius_px * radius_px:
@@ -167,11 +139,10 @@ def _random_scenario(boundary: Boundary, count: int) -> list[Sphere]:
         radius = random.uniform(0.4, 1.0)
         x = random.uniform(boundary.x_min + radius, boundary.x_max - radius)
         y = random.uniform(boundary.y_min + radius, boundary.y_max - radius)
-        z = random.uniform(boundary.z_min + radius, boundary.z_min + radius + 8.0)
         vx = random.uniform(-2.0, 2.0)
         vy = random.uniform(-2.0, 2.0)
         level = random.randint(0, 3)
-        spheres.append(Sphere(Vector3(x, y, z), Vector3(vx, vy, 0.0), radius=radius, level=level))
+        spheres.append(Sphere(Vector2(x, y), Vector2(vx, vy), radius=radius, level=level))
     return spheres
 
 
@@ -186,10 +157,10 @@ def _predicted_flight_distance(
 ) -> float:
     """Simulate a shot in isolation to estimate how far it would travel.
 
-    Mass-independent by construction: friction/gravity/resting in `step`
-    have no mass term (mass only matters for sphere-sphere collisions, and
-    there is only one sphere in this preview). Capped at `max_distance` so
-    the aiming line never grows absurdly long.
+    Mass-independent by construction: friction/resting in `step` have no
+    mass term (mass only matters for sphere-sphere collisions, and there is
+    only one sphere in this preview). Capped at `max_distance` so the
+    aiming line never grows absurdly long.
     """
     preview = copy.deepcopy(sphere)
     shoot(preview, angle_degrees, speed)
@@ -247,15 +218,8 @@ def draw_sphere(
     viewport: Viewport,
     config: RenderConfig,
 ) -> None:
-    ground_x, ground_y = _world_to_screen(sphere.position.x, sphere.position.y, boundary, viewport)
+    center = _world_to_screen(sphere.position.x, sphere.position.y, boundary, viewport)
     radius_px = max(int(sphere.radius * viewport.scale), 2)
-    height_above_ground = sphere.position.z - boundary.z_min
-    shadow_r = shadow_radius_px(radius_px, height_above_ground)
-    shadow_rect = pygame.Rect(0, 0, shadow_r * 2, int(shadow_r * 2 * SHADOW_FLATTEN))
-    shadow_rect.center = (ground_x, ground_y - int(shadow_r * SHADOW_CENTER_LIFT))
-    pygame.draw.ellipse(screen, SHADOW_COLOR, shadow_rect)
-
-    center = (ground_x, ground_y - int(sphere.position.z * viewport.scale))
     color = LEVEL_COLORS[sphere.level % len(LEVEL_COLORS)]
     pygame.draw.circle(screen, color, center, radius_px)
 
@@ -337,7 +301,9 @@ def run(
             draw_sphere(screen, font, sphere, boundary, viewport, render_config)
 
         if drag_sphere is not None:
-            start_center = _sphere_screen_center(drag_sphere, boundary, viewport)
+            start_center = _world_to_screen(
+                drag_sphere.position.x, drag_sphere.position.y, boundary, viewport
+            )
             shot_dx = (drag_start[0] - mouse_pos[0]) / viewport.scale
             shot_dy = -(drag_start[1] - mouse_pos[1]) / viewport.scale
             drag_length = math.hypot(shot_dx, shot_dy)
@@ -416,7 +382,7 @@ def _next_ball_preview(level: LevelDefinition, state: RoundState) -> Sphere | No
     next_level = state.remaining_queue[0]
     return Sphere(
         level.spawn_position,
-        Vector3(0.0, 0.0, 0.0),
+        Vector2(0.0, 0.0),
         radius=radius_for_level(next_level),
         level=next_level,
     )
@@ -553,7 +519,9 @@ def run_round(
         preview_sphere = _next_ball_preview(level, state)
         if preview_sphere is not None and not state.is_over:
             draw_sphere(screen, font, preview_sphere, level.boundary, viewport, render_config)
-            preview_center = _sphere_screen_center(preview_sphere, level.boundary, viewport)
+            preview_center = _world_to_screen(
+                preview_sphere.position.x, preview_sphere.position.y, level.boundary, viewport
+            )
             preview_radius_px = max(int(preview_sphere.radius * viewport.scale), 2)
             pygame.draw.circle(
                 screen, NEXT_BALL_OUTLINE_COLOR, preview_center, preview_radius_px, 3
@@ -578,7 +546,9 @@ def run_round(
                 line_length_px = MIN_AIM_LINE_PX + speed_fraction * (
                     MAX_AIM_LINE_PX - MIN_AIM_LINE_PX
                 )
-                start_center = _sphere_screen_center(preview_sphere, level.boundary, viewport)
+                start_center = _world_to_screen(
+                    preview_sphere.position.x, preview_sphere.position.y, level.boundary, viewport
+                )
                 direction_x, direction_y = shot_dx / drag_length, shot_dy / drag_length
                 arrow_tip = (
                     start_center[0] + direction_x * line_length_px,

@@ -14,7 +14,7 @@ from sphere_merger.game.scoring import MergeScoreFn, default_merge_score
 from sphere_merger.game.shooting import shoot
 from sphere_merger.physics.engine import step
 from sphere_merger.physics.sphere import Sphere
-from sphere_merger.physics.vector import Vector3
+from sphere_merger.physics.vector import Vector2
 
 DT = 1 / 50
 # Empirically checked against tunneling/never-settling at the shot speeds
@@ -101,7 +101,7 @@ def settle(spheres: list[Sphere]) -> None:
     considered over so the next one starts from a genuinely resting field.
     """
     for sphere in spheres:
-        sphere.velocity = Vector3(0.0, 0.0, 0.0)
+        sphere.velocity = Vector2(0.0, 0.0)
 
 
 def spawn_shot(state: RoundState, angle_degrees: float, speed: float) -> None:
@@ -121,7 +121,7 @@ def spawn_shot(state: RoundState, angle_degrees: float, speed: float) -> None:
     next_level = state.remaining_queue.pop(0)
     sphere = Sphere(
         position=state.level.spawn_position,
-        velocity=Vector3(0.0, 0.0, 0.0),
+        velocity=Vector2(0.0, 0.0),
         radius=radius_for_level(next_level),
         level=next_level,
     )

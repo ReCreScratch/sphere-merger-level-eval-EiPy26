@@ -12,10 +12,10 @@ bug (`game.round.play_shot` checks and settles atomically already).
 
 from sphere_merger.game.level import LevelDefinition
 from sphere_merger.physics.boundary import Boundary
-from sphere_merger.physics.vector import Vector3
+from sphere_merger.physics.vector import Vector2
 from sphere_merger.rendering.agent_grid import _Cell, compute_viewport, field_rect
 
-FIELD = Boundary(x_min=-6.0, x_max=6.0, y_min=-6.0, y_max=6.0, z_min=0.0)
+FIELD = Boundary(x_min=-6.0, x_max=6.0, y_min=-6.0, y_max=6.0)
 
 
 def _make_cell(shots: list[tuple[float, float]]) -> _Cell:
@@ -23,7 +23,7 @@ def _make_cell(shots: list[tuple[float, float]]) -> _Cell:
         boundary=FIELD,
         initial_spheres=[],
         shot_queue=[0] * len(shots),
-        spawn_position=Vector3(-4.0, -4.0, 0.5),
+        spawn_position=Vector2(-4.0, -4.0),
         target_score=999,
     )
     viewport = compute_viewport(level.boundary, (400.0, 400.0), (0.0, 0.0))
@@ -41,4 +41,4 @@ def test_step_physics_zeroes_velocity_the_moment_it_settles() -> None:
         steps += 1
         assert steps < 5000, "scenario never settled -- adjust the test shot"
 
-    assert all(sphere.velocity == Vector3(0.0, 0.0, 0.0) for sphere in cell.state.spheres)
+    assert all(sphere.velocity == Vector2(0.0, 0.0) for sphere in cell.state.spheres)

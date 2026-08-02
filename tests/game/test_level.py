@@ -3,10 +3,10 @@ import pytest
 from sphere_merger.game.level import LevelDefinition, generate_random_level, radius_for_level
 from sphere_merger.physics.boundary import Boundary
 from sphere_merger.physics.sphere import Sphere
-from sphere_merger.physics.vector import Vector3
+from sphere_merger.physics.vector import Vector2
 
-FIELD = Boundary(x_min=-5.0, x_max=5.0, y_min=-5.0, y_max=5.0, z_min=0.0)
-SPAWN = Vector3(0.0, 0.0, 3.0)
+FIELD = Boundary(x_min=-5.0, x_max=5.0, y_min=-5.0, y_max=5.0)
+SPAWN = Vector2(0.0, 0.0)
 
 
 def test_generate_random_level_is_deterministic_for_same_seed() -> None:
@@ -130,7 +130,7 @@ def test_level_definition_rejects_negative_shot_queue_levels() -> None:
 def test_level_definition_accepts_hand_designed_values() -> None:
     level = LevelDefinition(
         boundary=FIELD,
-        initial_spheres=[Sphere(Vector3(0.0, 0.0, 0.5), Vector3(0.0, 0.0, 0.0), 0.5, 0)],
+        initial_spheres=[Sphere(Vector2(0.0, 0.0), Vector2(0.0, 0.0), 0.5, 0)],
         shot_queue=[0, 0, 1],
         spawn_position=SPAWN,
         target_score=10,

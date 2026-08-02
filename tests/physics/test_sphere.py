@@ -1,9 +1,9 @@
 import pytest
 
 from sphere_merger.physics.sphere import Sphere
-from sphere_merger.physics.vector import Vector3
+from sphere_merger.physics.vector import Vector2
 
-ZERO = Vector3(0.0, 0.0, 0.0)
+ZERO = Vector2(0.0, 0.0)
 
 
 def test_mass_grows_with_radius() -> None:

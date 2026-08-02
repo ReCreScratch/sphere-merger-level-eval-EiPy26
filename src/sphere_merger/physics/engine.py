@@ -1,4 +1,4 @@
-"""Advances the physics simulation by fixed time steps."""
+"""Advances the physics simulation by fixed time steps (2D, no gravity)."""
 
 from __future__ import annotations
 
@@ -16,7 +16,13 @@ from sphere_merger.physics.collision import (
     resolve_overlap,
 )
 from sphere_merger.physics.sphere import Sphere
-from sphere_merger.physics.vector import Vector3
+
+# Purely a broad-phase optimization (skip the O(n^2) scan for pairs that are
+# both exactly stationary, see find_colliding_pairs) -- not a physical
+# "resting band" like the old gravity model needed. Without gravity nothing
+# re-drives a settled sphere's velocity away from exactly zero, so a tiny
+# fixed epsilon (float noise only) is all that's needed here.
+_MOVING_EPSILON = 1e-9
 
 _active_backend = "python"
 
@@ -68,33 +74,23 @@ class PhysicsConfig:
     """Tunable physics parameters, exposed for a future settings menu.
 
     Attributes:
-        gravity: Downward acceleration applied to `velocity.z` each step
-            (units/s^2). Higher = falls faster.
-        friction: Fraction of horizontal speed removed per step while a
-            sphere rests on the floor (0 = frictionless ice, 1 = stops dead
-            on contact).
+        friction: Fraction of speed removed per step (table drag) -- every
+            sphere, every step, regardless of contact state (0 = frictionless
+            ice, 1 = stops dead immediately). Replaces the old "only while
+            resting on the floor" special case from the 3D/gravity model --
+            there's no floor here, everything is always "on the table".
         sphere_restitution: Elasticity of sphere-sphere collisions (0 = fully
             inelastic, spheres stick to their post-collision velocity with no
             bounce-back; 1 = fully elastic, no kinetic energy lost).
-        boundary_restitution: Elasticity of contact with the field boundary
-            (floor and walls). At 1.0 the floor is a perfect trampoline and a
-            falling sphere bounces forever at the same height; values below 1
-            lose energy on every bounce until the sphere settles.
-        rest_threshold_factor: Multiplier on `gravity * dt` (one step's worth
-            of gravity) below which boundary contact is treated as resting
-            instead of bouncing. Without this, a settling sphere never fully
-            stops -- it converges to a small non-zero "jitter" velocity
-            instead, a discretization artifact rather than real physics. The
-            steady-state jitter speed is always < `gravity * dt`, so a
-            factor of 1.0 reliably stops it regardless of
-            `boundary_restitution`; 0 disables resting altogether.
+        boundary_restitution: Elasticity of contact with the field walls.
+            At 1.0 a wall is a perfect reflector and a sphere bounces forever
+            at the same speed; values below 1 lose energy on every bounce
+            until the sphere settles.
     """
 
-    gravity: float = 9.81
-    friction: float = 0.02
+    friction: float = 0.0075
     sphere_restitution: float = 0.9
     boundary_restitution: float = 0.6
-    rest_threshold_factor: float = 1.0
 
 
 @deal.pre(lambda spheres, dt, boundary, config=None, collision_filter=None: dt > 0)
@@ -107,9 +103,9 @@ def step(
 ) -> None:
     """Advance all `spheres` by one time step `dt`, mutating them in place.
 
-    Fixed, deterministic order: gravity -> integration -> boundary contact
-    (incl. floor friction) -> pairwise sphere collisions (velocity solver,
-    then overlap solver) -- always in `spheres` list order.
+    Fixed, deterministic order: integration -> friction -> boundary contact
+    -> pairwise sphere collisions (velocity solver, then overlap solver) --
+    always in `spheres` list order.
 
     `collision_filter`, if given, is checked for every colliding pair before
     resolving it; pairs for which it returns `False` are left exactly as
@@ -123,28 +119,19 @@ def step(
     if _active_backend == "rust":
         _step_native(spheres, dt, boundary, config, collision_filter)
         return
-    rest_velocity_threshold = config.rest_threshold_factor * config.gravity * dt
 
     for sphere in spheres:
-        sphere.velocity = Vector3(
-            sphere.velocity.x, sphere.velocity.y, sphere.velocity.z - config.gravity * dt
-        )
         sphere.position = sphere.position + sphere.velocity * dt
-        resolve_boundary(sphere, boundary, config.boundary_restitution, rest_velocity_threshold)
-        if sphere.position.z <= boundary.z_min + sphere.radius + 1e-9:
-            sphere.velocity = Vector3(
-                sphere.velocity.x * (1 - config.friction),
-                sphere.velocity.y * (1 - config.friction),
-                sphere.velocity.z,
-            )
+        sphere.velocity = sphere.velocity * (1 - config.friction)
+        resolve_boundary(sphere, boundary, config.boundary_restitution)
 
-    for i, j in find_colliding_pairs(spheres, moving_threshold=rest_velocity_threshold):
+    for i, j in find_colliding_pairs(spheres, moving_threshold=_MOVING_EPSILON):
         a, b = spheres[i], spheres[j]
         if not is_colliding(a, b):
             continue
         if collision_filter is not None and not collision_filter(a, b):
             continue
-        _resolve_velocity(a, b, config.sphere_restitution, rest_velocity_threshold)
+        _resolve_velocity(a, b, config.sphere_restitution)
         resolve_overlap(a, b)
 
 
@@ -155,70 +142,28 @@ def _step_native(
     config: PhysicsConfig,
     collision_filter: Callable[[Sphere, Sphere], bool] | None,
 ) -> None:
-    """`step`'s native-backend branch, active while `native_backend()` (or
-    `enable_native_backend()`) is in effect.
+    """`step`'s native-backend branch.
 
-    `collision_filter` can't cross the FFI boundary as an arbitrary Python
-    callable, so it's collapsed to a bool: non-`None` is assumed to mean
-    "exclude same-level pairs", the only filter `game.round.advance_physics`
-    (the sole caller that ever passes one) uses. A genuinely different
-    filter would silently misbehave under this backend.
+    Not yet ported to the 2D/no-gravity model -- `native/sphere_merger_native`
+    still expects the old 3D signature. Raises until that port lands (see
+    docs/physics_optimizations.md); the Python path above is fully correct
+    and is what every caller gets by default (`current_backend() == "python"`).
     """
-    import sphere_merger_native
-
-    boundary_args = (
-        boundary.x_min,
-        boundary.x_max,
-        boundary.y_min,
-        boundary.y_max,
-        boundary.z_min,
-        boundary.z_max,
+    raise NotImplementedError(
+        "native backend not yet ported to the 2D physics model -- use the Python backend "
+        "(the default) until native/sphere_merger_native is updated to match"
     )
-    config_args = (
-        config.gravity,
-        config.friction,
-        config.sphere_restitution,
-        config.boundary_restitution,
-        config.rest_threshold_factor,
-    )
-    sphere_args = [
-        (
-            s.position.x,
-            s.position.y,
-            s.position.z,
-            s.velocity.x,
-            s.velocity.y,
-            s.velocity.z,
-            s.radius,
-            s.level,
-        )
-        for s in spheres
-    ]
-    updated = sphere_merger_native.step_native(
-        sphere_args, dt, boundary_args, config_args, collision_filter is not None
-    )
-    for sphere, (x, y, z, vx, vy, vz, _radius, _level) in zip(spheres, updated, strict=True):
-        sphere.position = Vector3(x, y, z)
-        sphere.velocity = Vector3(vx, vy, vz)
 
 
-@deal.pre(lambda a, b, restitution, rest_velocity_threshold=0.0: is_colliding(a, b))
-def _resolve_velocity(
-    a: Sphere, b: Sphere, restitution: float, rest_velocity_threshold: float = 0.0
-) -> None:
+@deal.pre(lambda a, b, restitution: is_colliding(a, b))
+def _resolve_velocity(a: Sphere, b: Sphere, restitution: float) -> None:
     """Impulse-based collision response along the contact normal.
 
     Tangential velocity is left untouched (no spin/friction in collisions).
-    At or below `rest_velocity_threshold`, the collision is treated as
-    resting contact (fully inelastic along the normal) rather than a bounce.
-    This matters for stacked spheres: gravity re-drives the same tiny
-    approach speed into the contact every step (like it does at the floor),
-    and without a rest case, that would jitter forever instead of settling --
-    the same discretization artifact `resolve_boundary`'s
-    `rest_velocity_threshold` already guards against, including the same
-    `<=` vs `<` edge case (see its docstring): with the default
-    `rest_threshold_factor = 1.0`, one step of freefall from an exactly
-    resting pair lands exactly on the threshold, not strictly below it.
+    No "resting contact" special case here (unlike the old 3D/gravity
+    model): without gravity, nothing continuously re-drives two touching
+    spheres back together, so a normal restitution-scaled bounce simply
+    loses energy each time and settles on its own.
     """
     normal = contact_normal(a, b)
 
@@ -226,7 +171,6 @@ def _resolve_velocity(
     if approach_speed <= 0:
         return
 
-    effective_restitution = 0.0 if approach_speed <= rest_velocity_threshold else restitution
-    impulse = (1 + effective_restitution) * approach_speed / (1 / a.mass + 1 / b.mass)
+    impulse = (1 + restitution) * approach_speed / (1 / a.mass + 1 / b.mass)
     a.velocity = a.velocity - normal * (impulse / a.mass)
     b.velocity = b.velocity + normal * (impulse / b.mass)

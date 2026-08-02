@@ -25,14 +25,14 @@ def merge_spheres(a: Sphere, b: Sphere) -> Sphere:
     is in place, merged spheres stay the same size as everything else
     instead of visibly growing with every merge.
 
-    >>> from sphere_merger.physics.vector import Vector3
-    >>> a = Sphere(Vector3(0.0, 0.0, 1.0), Vector3(1.0, 0.0, 0.0), radius=0.5, level=0)
-    >>> b = Sphere(Vector3(1.0, 0.0, 1.0), Vector3(-1.0, 0.0, 0.0), radius=0.5, level=0)
+    >>> from sphere_merger.physics.vector import Vector2
+    >>> a = Sphere(Vector2(0.0, 0.0), Vector2(1.0, 0.0), radius=0.5, level=0)
+    >>> b = Sphere(Vector2(1.0, 0.0), Vector2(-1.0, 0.0), radius=0.5, level=0)
     >>> merged = merge_spheres(a, b)
     >>> merged.level, merged.position
-    (1, Vector3(x=0.5, y=0.0, z=1.0))
+    (1, Vector2(x=0.5, y=0.0))
     >>> merged.velocity
-    Vector3(x=0.0, y=0.0, z=0.0)
+    Vector2(x=0.0, y=0.0)
     """
     if a.level != b.level:
         raise ValueError(f"can only merge same-level spheres, got levels {a.level} and {b.level}")

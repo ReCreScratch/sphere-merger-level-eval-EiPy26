@@ -2,11 +2,11 @@ import pytest
 
 from sphere_merger.game.merge import merge_spheres, resolve_merges
 from sphere_merger.physics.sphere import Sphere
-from sphere_merger.physics.vector import Vector3
+from sphere_merger.physics.vector import Vector2
 
 
 def _sphere(x: float, level: int = 0, radius: float = 0.5, vx: float = 0.0) -> Sphere:
-    return Sphere(Vector3(x, 0.0, 1.0), Vector3(vx, 0.0, 0.0), radius=radius, level=level)
+    return Sphere(Vector2(x, 0.0), Vector2(vx, 0.0), radius=radius, level=level)
 
 
 def test_merge_spheres_increments_level() -> None:

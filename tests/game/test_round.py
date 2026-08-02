@@ -4,9 +4,9 @@ from sphere_merger.game.level import LevelDefinition, radius_for_level
 from sphere_merger.game.round import RoundState, play_shot, settle, start_round
 from sphere_merger.physics.boundary import Boundary
 from sphere_merger.physics.sphere import Sphere
-from sphere_merger.physics.vector import Vector3
+from sphere_merger.physics.vector import Vector2
 
-FIELD = Boundary(x_min=-5.0, x_max=5.0, y_min=-5.0, y_max=5.0, z_min=0.0)
+FIELD = Boundary(x_min=-5.0, x_max=5.0, y_min=-5.0, y_max=5.0)
 
 
 def _touching_pair_level(target_score: int = 100) -> LevelDefinition:
@@ -15,11 +15,9 @@ def _touching_pair_level(target_score: int = 100) -> LevelDefinition:
     radius = radius_for_level(0)
     return LevelDefinition(
         boundary=FIELD,
-        initial_spheres=[
-            Sphere(Vector3(0.0, 0.0, radius), Vector3(0.0, 0.0, 0.0), radius, level=0)
-        ],
+        initial_spheres=[Sphere(Vector2(0.0, 0.0), Vector2(0.0, 0.0), radius, level=0)],
         shot_queue=[0],
-        spawn_position=Vector3(0.9, 0.0, radius),
+        spawn_position=Vector2(0.9, 0.0),
         target_score=target_score,
     )
 
@@ -28,11 +26,9 @@ def _far_apart_level(target_score: int = 100) -> LevelDefinition:
     radius = radius_for_level(0)
     return LevelDefinition(
         boundary=FIELD,
-        initial_spheres=[
-            Sphere(Vector3(-4.0, 0.0, radius), Vector3(0.0, 0.0, 0.0), radius, level=0)
-        ],
+        initial_spheres=[Sphere(Vector2(-4.0, 0.0), Vector2(0.0, 0.0), radius, level=0)],
         shot_queue=[0],
-        spawn_position=Vector3(4.0, 0.0, radius),
+        spawn_position=Vector2(4.0, 0.0),
         target_score=target_score,
     )
 
@@ -105,13 +101,13 @@ def test_play_shot_raises_once_round_is_over() -> None:
 def test_settle_zeroes_all_velocities() -> None:
     radius = radius_for_level(0)
     spheres = [
-        Sphere(Vector3(0.0, 0.0, radius), Vector3(1.0, -2.0, 0.3), radius, level=0),
-        Sphere(Vector3(3.0, 0.0, radius), Vector3(0.0, 0.0, 0.0), radius, level=0),
+        Sphere(Vector2(0.0, 0.0), Vector2(1.0, -2.0), radius, level=0),
+        Sphere(Vector2(3.0, 0.0), Vector2(0.0, 0.0), radius, level=0),
     ]
 
     settle(spheres)
 
-    assert all(sphere.velocity == Vector3(0.0, 0.0, 0.0) for sphere in spheres)
+    assert all(sphere.velocity == Vector2(0.0, 0.0) for sphere in spheres)
 
 
 def test_play_shot_leaves_a_settled_shot_at_true_rest() -> None:
@@ -120,4 +116,4 @@ def test_play_shot_leaves_a_settled_shot_at_true_rest() -> None:
 
     play_shot(state, angle_degrees=0.0, speed=0.0)
 
-    assert all(sphere.velocity == Vector3(0.0, 0.0, 0.0) for sphere in state.spheres)
+    assert all(sphere.velocity == Vector2(0.0, 0.0) for sphere in state.spheres)

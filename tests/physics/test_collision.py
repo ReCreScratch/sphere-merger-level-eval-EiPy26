@@ -11,13 +11,13 @@ from sphere_merger.physics.collision import (
     resolve_overlap,
 )
 from sphere_merger.physics.sphere import Sphere
-from sphere_merger.physics.vector import Vector3
+from sphere_merger.physics.vector import Vector2
 
-ZERO = Vector3(0.0, 0.0, 0.0)
+ZERO = Vector2(0.0, 0.0)
 
 
 def _sphere_at(x: float, radius: float = 1.0) -> Sphere:
-    return Sphere(Vector3(x, 0.0, 0.0), ZERO, radius=radius, level=0)
+    return Sphere(Vector2(x, 0.0), ZERO, radius=radius, level=0)
 
 
 def test_is_colliding_true_when_overlapping() -> None:
@@ -45,8 +45,8 @@ def test_resolve_overlap_separates_two_spheres() -> None:
 
 
 def test_resolve_overlap_coincident_uses_relative_velocity_direction() -> None:
-    a = Sphere(ZERO, Vector3(0.0, 0.0, 0.0), radius=1.0, level=0)
-    b = Sphere(ZERO, Vector3(0.0, 5.0, 0.0), radius=1.0, level=0)
+    a = Sphere(ZERO, Vector2(0.0, 0.0), radius=1.0, level=0)
+    b = Sphere(ZERO, Vector2(0.0, 5.0), radius=1.0, level=0)
     resolve_overlap(a, b)
     assert a.position.y < 0.0
     assert b.position.y > 0.0
@@ -55,8 +55,8 @@ def test_resolve_overlap_coincident_uses_relative_velocity_direction() -> None:
 
 
 def test_resolve_overlap_coincident_and_no_relative_velocity_falls_back_to_x_axis() -> None:
-    a = Sphere(ZERO, Vector3(2.0, 0.0, 0.0), radius=1.0, level=0)
-    b = Sphere(ZERO, Vector3(2.0, 0.0, 0.0), radius=1.0, level=0)
+    a = Sphere(ZERO, Vector2(2.0, 0.0), radius=1.0, level=0)
+    b = Sphere(ZERO, Vector2(2.0, 0.0), radius=1.0, level=0)
     resolve_overlap(a, b)
     assert a.position.x < 0.0
     assert b.position.x > 0.0
@@ -73,6 +73,6 @@ def test_resolve_overlap_always_removes_overlap(
 ) -> None:
     dist = max(radius_a + radius_b - overlap_amount, 0.01)
     a = Sphere(ZERO, ZERO, radius=radius_a, level=0)
-    b = Sphere(Vector3(dist, 0.0, 0.0), ZERO, radius=radius_b, level=0)
+    b = Sphere(Vector2(dist, 0.0), ZERO, radius=radius_b, level=0)
     resolve_overlap(a, b)
     assert distance(a, b) >= a.radius + b.radius - 1e-6

@@ -18,7 +18,7 @@ from sphere_merger.game.shooting import shoot
 from sphere_merger.physics.boundary import Boundary
 from sphere_merger.physics.engine import PhysicsConfig, step
 from sphere_merger.physics.sphere import Sphere
-from sphere_merger.physics.vector import Vector3
+from sphere_merger.physics.vector import Vector2
 from sphere_merger.rendering.renderer import (
     FIELD_OUTLINE_COLOR,
     RenderConfig,
@@ -43,10 +43,9 @@ def _build_instances(
     for i in range(cell_count):
         instance_spheres = copy.deepcopy(spheres)
         shot_sphere = instance_spheres[shot_sphere_index]
-        shot_sphere.position = Vector3(
+        shot_sphere.position = Vector2(
             boundary.x_min + shot_sphere.radius,
             boundary.y_min + shot_sphere.radius,
-            boundary.z_min + shot_sphere.radius,
         )
         shoot(shot_sphere, angle_degrees=i * angle_step, speed=speed)
         instances.append(instance_spheres)
