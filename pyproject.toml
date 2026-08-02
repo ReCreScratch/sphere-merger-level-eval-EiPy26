@@ -37,6 +37,10 @@ mypy_path = "src"
 packages = ["sphere_merger"]
 strict = false
 
+[[tool.mypy.overrides]]
+module = "sphere_merger_native"
+ignore_missing_imports = true
+
 [tool.pytest.ini_options]
 addopts = "--doctest-modules"
 testpaths = ["src", "tests"]

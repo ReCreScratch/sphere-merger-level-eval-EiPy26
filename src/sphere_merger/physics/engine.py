@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 
 import deal
@@ -16,6 +17,42 @@ from sphere_merger.physics.collision import (
 )
 from sphere_merger.physics.sphere import Sphere
 from sphere_merger.physics.vector import Vector3
+
+_active_backend = "python"
+
+
+def enable_native_backend() -> None:
+    """Route `step` through the native Rust extension (`sphere_merger_native`,
+    see `native/sphere_merger_native/` and README.md) for the rest of this
+    process, permanently.
+
+    Global (process-wide) switch rather than a parameter threaded through
+    every caller (`advance_physics`, `play_shot`, `simulate_shot`, agents,
+    runner...) -- mirrors `agents.runner.disable_contracts_in_worker`'s
+    pattern, meant to be used the same way (as a `ProcessPoolExecutor`
+    `initializer`, see `agents.runner.prepare_native_batch_worker`) since
+    the flag doesn't cross process boundaries either. For the calling
+    process itself, prefer the scoped `native_backend()` context manager.
+    """
+    global _active_backend
+    _active_backend = "rust"
+
+
+@contextmanager
+def native_backend() -> Iterator[None]:
+    """Route `step` through the native Rust extension for the duration of
+    the block, then restore whatever backend was active before.
+
+    See `enable_native_backend` for why this is a global switch, not a
+    parameter.
+    """
+    global _active_backend
+    previous = _active_backend
+    _active_backend = "rust"
+    try:
+        yield
+    finally:
+        _active_backend = previous
 
 
 @dataclass
@@ -75,6 +112,9 @@ def step(
     """
     if config is None:
         config = PhysicsConfig()
+    if _active_backend == "rust":
+        _step_native(spheres, dt, boundary, config, collision_filter)
+        return
     rest_velocity_threshold = config.rest_threshold_factor * config.gravity * dt
 
     for sphere in spheres:
@@ -98,6 +138,60 @@ def step(
             continue
         _resolve_velocity(a, b, config.sphere_restitution, rest_velocity_threshold)
         resolve_overlap(a, b)
+
+
+def _step_native(
+    spheres: list[Sphere],
+    dt: float,
+    boundary: Boundary,
+    config: PhysicsConfig,
+    collision_filter: Callable[[Sphere, Sphere], bool] | None,
+) -> None:
+    """`step`'s native-backend branch, active while `native_backend()` (or
+    `enable_native_backend()`) is in effect.
+
+    `collision_filter` can't cross the FFI boundary as an arbitrary Python
+    callable, so it's collapsed to a bool: non-`None` is assumed to mean
+    "exclude same-level pairs", the only filter `game.round.advance_physics`
+    (the sole caller that ever passes one) uses. A genuinely different
+    filter would silently misbehave under this backend.
+    """
+    import sphere_merger_native
+
+    boundary_args = (
+        boundary.x_min,
+        boundary.x_max,
+        boundary.y_min,
+        boundary.y_max,
+        boundary.z_min,
+        boundary.z_max,
+    )
+    config_args = (
+        config.gravity,
+        config.friction,
+        config.sphere_restitution,
+        config.boundary_restitution,
+        config.rest_threshold_factor,
+    )
+    sphere_args = [
+        (
+            s.position.x,
+            s.position.y,
+            s.position.z,
+            s.velocity.x,
+            s.velocity.y,
+            s.velocity.z,
+            s.radius,
+            s.level,
+        )
+        for s in spheres
+    ]
+    updated = sphere_merger_native.step_native(
+        sphere_args, dt, boundary_args, config_args, collision_filter is not None
+    )
+    for sphere, (x, y, z, vx, vy, vz, _radius, _level) in zip(spheres, updated, strict=True):
+        sphere.position = Vector3(x, y, z)
+        sphere.velocity = Vector3(vx, vy, vz)
 
 
 @deal.pre(lambda a, b, restitution, rest_velocity_threshold=0.0: is_colliding(a, b))
