@@ -7,6 +7,47 @@ Einträge oben anhängen.
 
 ---
 
+## 2026-08-02 — Coding Agent schlug Rust/C++ nicht von sich aus vor
+
+Kontext: `docs/physics_optimizations.md`, Performance-Session zur
+Agenten-Laufzeit.
+
+### Was ist passiert
+
+Auf die offene Frage "was sind die größten Bottlenecks und Hebel für die
+Agenten-Performance?" identifizierte der Coding Agent mehrere Hebel
+(Winkelauflösung, `deepcopy`-Ersatz, `deal`-Contracts abschalten,
+Executor-Pooling, Alpha-Pruning) -- alle innerhalb der bestehenden
+Python-Architektur. Erst auf die explizite Nutzerfrage "ist es möglich,
+die Simulation auf der GPU laufen zu lassen, oder die Physik auf C++/Rust
+umzuschreiben?" wurde diese Option überhaupt diskutiert -- und stellte
+sich dann als der mit Abstand größte Hebel heraus (~18-90x, gegenüber
+niedrigen einstelligen Prozentgewinnen der zuvor selbst vorgeschlagenen
+Optimierungen).
+
+### Warum bemerkenswert
+
+Die eigene Bottleneck-Analyse des Agents blieb an der Grenze der
+bestehenden Implementierung stehen -- optimiert wurde *innerhalb* der
+gegebenen Sprache/Architektur, nicht die Sprache/Architektur selbst als
+Stellschraube in Betracht gezogen. Der eigentlich wirksamste Hebel kam
+nur zustande, weil ein Mensch explizit nach einer radikaleren Option
+gefragt hat.
+
+### Mögliche Erklärung
+
+Naheliegend: ein Sprachwechsel ist ein großer, teurer, schwer
+rückgängig zu machender Schritt (neues Toolchain, doppelte
+Implementierung, neue Korrektheits-Infrastruktur) -- genau die Art
+Vorschlag, die ein Agent von sich aus eher zurückhält, wenn die Frage
+offen nach "Hebeln" statt nach "was auch immer nötig ist" gestellt wird.
+Die selbst vorgeschlagenen Optimierungen waren durchweg klein, reversibel
+und passten zum "kleine Schritte"-Arbeitsstil dieses Projekts -- ein
+Sprachwechsel passt strukturell nicht in dieses Muster, selbst wenn er in
+der Sache der bei weitem wirksamere Hebel gewesen wäre.
+
+---
+
 ## 2026-07-30 — `deal`-Contract fängt echten Bug (Meilenstein 3, Stresstest)
 
 Kontext: `docs/ki_log.md`, Commit `d16bf46`.
