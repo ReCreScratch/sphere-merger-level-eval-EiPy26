@@ -291,8 +291,175 @@ fn step_native(
         .collect()
 }
 
+fn is_settled(spheres: &[SphereState], settle_speed_threshold: f64) -> bool {
+    spheres.iter().all(|s| s.vel.length() < settle_speed_threshold)
+}
+
+fn settle_velocities(spheres: &mut [SphereState]) {
+    for s in spheres.iter_mut() {
+        s.vel = Vec3 { x: 0.0, y: 0.0, z: 0.0 };
+    }
+}
+
+/// `game/scoring.py::default_merge_score` -- the only merge-score formula
+/// ever passed in this codebase, hardcoded here rather than accepted as a
+/// callback (same reasoning as `exclude_same_level`: arbitrary Python
+/// callables can't cross the FFI boundary).
+fn default_merge_score(new_level: i64, combo_index: i64) -> i64 {
+    2i64.pow(new_level as u32) * combo_index
+}
+
+/// `game/merge.py::merge_spheres` -- mass/momentum-weighted combination of
+/// two same-level spheres into one at `level + 1`. `radius_for_level`
+/// currently returns a fixed `base_radius` regardless of level (see its
+/// docstring -- a deliberate, temporary simplification), so that's what's
+/// passed in here rather than reimplementing level-dependent sizing.
+fn merge_spheres(a: &SphereState, b: &SphereState, base_radius: f64) -> SphereState {
+    let new_mass = a.mass() + b.mass();
+    SphereState {
+        pos: a.pos.scale(a.mass()).add(b.pos.scale(b.mass())).scale(1.0 / new_mass),
+        vel: a.vel.scale(a.mass()).add(b.vel.scale(b.mass())).scale(1.0 / new_mass),
+        radius: base_radius,
+        level: a.level + 1,
+    }
+}
+
+/// `game/merge.py::resolve_merges` -- same fixed pair order as
+/// `find_colliding_pairs` (with `moving_threshold=0.0`, i.e. every pair
+/// checked every call, deliberately not reusing `step`'s resting-pair
+/// skip: merges are score-relevant, not just physics smoothness). Returns
+/// the resulting level of each merge, in processing order.
+fn resolve_merges(spheres: &mut Vec<SphereState>, base_radius: f64) -> Vec<i64> {
+    let pairs = find_colliding_pairs(spheres, 0.0);
+    let mut already_merged = std::collections::HashSet::new();
+    let mut to_remove = std::collections::HashSet::new();
+    let mut new_levels = Vec::new();
+
+    for (i, j) in pairs {
+        if already_merged.contains(&i) || already_merged.contains(&j) {
+            continue;
+        }
+        if spheres[i].level != spheres[j].level {
+            continue;
+        }
+        let merged = merge_spheres(&spheres[i], &spheres[j], base_radius);
+        new_levels.push(merged.level);
+        spheres[i] = merged;
+        to_remove.insert(j);
+        already_merged.insert(i);
+        already_merged.insert(j);
+    }
+
+    if !to_remove.is_empty() {
+        let mut idx = 0usize;
+        spheres.retain(|_| {
+            let keep = !to_remove.contains(&idx);
+            idx += 1;
+            keep
+        });
+    }
+    new_levels
+}
+
+/// Native port of `agents.base.simulate_shot`'s whole settle loop --
+/// spawn the next queued sphere (`game.shooting.shoot`'s formula), then
+/// `physics.engine.step` + merge-resolve + score repeatedly (mirroring
+/// `game.round.play_shot`/`advance_physics`) until the shot's score
+/// reaches `target_score`, the field settles, or `max_settle_steps` is
+/// hit. One FFI call covers a whole shot's worth of steps instead of one
+/// call per physics step, so the marshaling cost that dominates
+/// `step_native` for a single step is paid once per candidate shot here.
+///
+/// Returns `(final_spheres, score_gained_by_this_shot, is_won)`.
+#[pyfunction]
+#[pyo3(signature = (
+    spheres, next_level, next_radius, spawn_position, angle_degrees, speed,
+    dt, boundary, config, max_settle_steps, settle_speed_threshold,
+    score_before, target_score
+))]
+#[allow(clippy::too_many_arguments)]
+fn simulate_shot_native(
+    spheres: Vec<SphereTuple>,
+    next_level: i64,
+    next_radius: f64,
+    spawn_position: (f64, f64, f64),
+    angle_degrees: f64,
+    speed: f64,
+    dt: f64,
+    boundary: (f64, f64, f64, f64, f64, Option<f64>),
+    config: (f64, f64, f64, f64, f64),
+    max_settle_steps: u32,
+    settle_speed_threshold: f64,
+    score_before: i64,
+    target_score: i64,
+) -> (Vec<SphereTuple>, i64, bool) {
+    let mut states: Vec<SphereState> = spheres
+        .iter()
+        .map(|&(x, y, z, vx, vy, vz, radius, level)| SphereState {
+            pos: Vec3 { x, y, z },
+            vel: Vec3 { x: vx, y: vy, z: vz },
+            radius,
+            level,
+        })
+        .collect();
+
+    let boundary_state = BoundaryState {
+        x_min: boundary.0,
+        x_max: boundary.1,
+        y_min: boundary.2,
+        y_max: boundary.3,
+        z_min: boundary.4,
+        z_max: boundary.5,
+    };
+    let config_state = ConfigState {
+        gravity: config.0,
+        friction: config.1,
+        sphere_restitution: config.2,
+        boundary_restitution: config.3,
+        rest_threshold_factor: config.4,
+    };
+
+    let angle_radians = angle_degrees.to_radians();
+    let (sx, sy, sz) = spawn_position;
+    states.push(SphereState {
+        pos: Vec3 { x: sx, y: sy, z: sz },
+        vel: Vec3 { x: speed * angle_radians.cos(), y: speed * angle_radians.sin(), z: 0.0 },
+        radius: next_radius,
+        level: next_level,
+    });
+
+    let mut score = score_before;
+    let mut combo_index: i64 = 0;
+    let mut won = score >= target_score;
+
+    for _ in 0..max_settle_steps {
+        step_impl(&mut states, dt, &boundary_state, &config_state, true);
+
+        for new_level in resolve_merges(&mut states, next_radius) {
+            combo_index += 1;
+            score += default_merge_score(new_level, combo_index);
+        }
+
+        won = score >= target_score;
+        if won {
+            break;
+        }
+        if is_settled(&states, settle_speed_threshold) {
+            settle_velocities(&mut states);
+            break;
+        }
+    }
+
+    let final_spheres = states
+        .iter()
+        .map(|s| (s.pos.x, s.pos.y, s.pos.z, s.vel.x, s.vel.y, s.vel.z, s.radius, s.level))
+        .collect();
+    (final_spheres, score - score_before, won)
+}
+
 #[pymodule]
 fn sphere_merger_native(_py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(step_native, m)?)?;
+    m.add_function(wrap_pyfunction!(simulate_shot_native, m)?)?;
     Ok(())
 }

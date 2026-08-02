@@ -119,6 +119,23 @@ statt tausender einzelner Python-Aufrufe.
   119.9k Schritte/s) -- FFI-Marshaling-Overhead dominiert bei einem
   einzelnen Schritt pro Aufruf, der eigentliche Hebel kommt erst, wenn die
   ganze Settle-Schleife in einem Aufruf läuft (noch nicht umgesetzt).
+- **Ganze Settle-Schleife portiert** (`simulate_shot_native`, ersetzt
+  Spawn + wiederholtes `step` + Merge + Scoring als einen FFI-Aufruf statt
+  vieler einzelner). `agents.base.simulate_shot` schaltet transparent um
+  (`current_backend() == "rust"`), gleiche Aufrufer, gleiche Signatur.
+  Parity-Test (`tests/agents/test_native_simulate_shot_parity.py`) nur
+  bis auf Float-Toleranz, nicht bit-exakt -- verifiziert: `math.cos`
+  (MSVC-CRT) und Rusts `f64::cos` (MinGW-libm) weichen für denselben
+  Winkel im letzten Bit ab (wie `pow`, auch `cos`/`sin` sind nicht
+  IEEE754-korrekt-gerundet vorgeschrieben), dieses eine Bit verstärkt sich
+  über die Kollisions-Kaskade der Settle-Schleife auf ~1e-15 relative
+  Differenz am Ende -- Scores/Merge-Anzahl in jedem bisher beobachteten
+  Fall trotzdem identisch. Praktisch: Backend-Wechsel mitten in einem
+  Level ist nicht bit-reproduzierbar, einzelnes Backend durchgehend schon.
+  **Gemessene Wirkung:** `choose_shot` (Lookahead, 1. Baseline-Level)
+  5.5s -> 0.3s ohne Executor (~18x), mit Executor+natives Backend nach
+  Warmup ~0.06s (~90x ggü. reinem Python ohne Executor) -- das ist der
+  Sprung, den `step_native` allein (nur 2.2x) nicht liefern konnte.
 - **Backend-Toggle:** `physics.engine.native_backend()` (Kontextmanager)
   bzw. `enable_native_backend()` (Dauerhaft, für Worker-Prozesse) -- ein
   globaler Prozess-Schalter, kein durchgereichter Parameter (analog zu

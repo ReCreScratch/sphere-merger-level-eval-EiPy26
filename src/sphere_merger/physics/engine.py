@@ -55,6 +55,14 @@ def native_backend() -> Iterator[None]:
         _active_backend = previous
 
 
+def current_backend() -> str:
+    """`"python"` or `"rust"` -- whichever backend `step` (and callers that
+    check this themselves, e.g. `agents.base.simulate_shot`'s own native
+    fast path) currently route through.
+    """
+    return _active_backend
+
+
 @dataclass
 class PhysicsConfig:
     """Tunable physics parameters, exposed for a future settings menu.
