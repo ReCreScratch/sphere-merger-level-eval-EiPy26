@@ -16,13 +16,14 @@ from sphere_merger.physics.engine import step
 from sphere_merger.physics.sphere import Sphere
 from sphere_merger.physics.vector import Vector2
 
-DT = 1 / 50
-# Empirically checked against tunneling/never-settling at the shot speeds
-# this project uses (up to ~20): 1/30 leaves ~half of trials never
-# reaching SETTLE_SPEED_THRESHOLD in a reasonable step budget, 1/50 is
-# clean (0 unsettled in 80 trials) while still ~2x fewer steps than the
-# previous 0.01. Shared by every physics-driven part of the game (headless
-# agent evaluation, rendered replay, interactive play) so results computed
+DT = 1 / 60
+# Finer than the previously checked 1/50 -- current parameter sweep uses
+# higher shot speeds (up to ~25), which raises tunneling risk (a fast
+# sphere's position can jump past another between two discrete steps
+# without ever overlapping); a smaller dt keeps per-step travel distance
+# down instead. Revisit if merges start looking implausible.
+# Shared by every physics-driven part of the game (headless agent
+# evaluation, rendered replay, interactive play) so results computed
 # headless reproduce identically when replayed/watched -- see
 # rendering.agent_grid and rendering.renderer.run_round, which both default
 # their own `dt` to this constant instead of a rendering-only value.
