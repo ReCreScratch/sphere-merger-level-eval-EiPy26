@@ -16,7 +16,16 @@ from sphere_merger.physics.engine import step
 from sphere_merger.physics.sphere import Sphere
 from sphere_merger.physics.vector import Vector3
 
-DT = 0.01
+DT = 1 / 50
+# Empirically checked against tunneling/never-settling at the shot speeds
+# this project uses (up to ~20): 1/30 leaves ~half of trials never
+# reaching SETTLE_SPEED_THRESHOLD in a reasonable step budget, 1/50 is
+# clean (0 unsettled in 80 trials) while still ~2x fewer steps than the
+# previous 0.01. Shared by every physics-driven part of the game (headless
+# agent evaluation, rendered replay, interactive play) so results computed
+# headless reproduce identically when replayed/watched -- see
+# rendering.agent_grid and rendering.renderer.run_round, which both default
+# their own `dt` to this constant instead of a rendering-only value.
 MAX_SETTLE_STEPS = 2000
 # Matches test_stress.py's REST_TOLERANCE: stacked contacts settle into a
 # small bounded jitter rather than exactly zero (see docs/ki_log.md), so

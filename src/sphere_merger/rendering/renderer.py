@@ -11,6 +11,7 @@ import pygame
 
 from sphere_merger.game.level import LevelDefinition, radius_for_level
 from sphere_merger.game.round import (
+    DT,
     RoundState,
     advance_physics,
     is_settled,
@@ -422,7 +423,7 @@ def _next_ball_preview(level: LevelDefinition, state: RoundState) -> Sphere | No
 
 
 def run_round(
-    level: LevelDefinition, render_config: RenderConfig | None = None, dt: float = 1 / 60
+    level: LevelDefinition, render_config: RenderConfig | None = None, dt: float = DT
 ) -> RoundState:
     """Open a window and let the player shoot through one round of `level`.
 
@@ -443,8 +444,12 @@ def run_round(
     screen edge, since the OS cursor can't move past it.
 
     `dt` is the simulated time advanced per rendered frame; it defaults to
-    `1/60` (matching the `clock.tick(60)` frame cap below) so the round
-    plays out in real time instead of in slow motion.
+    `game.round.DT` -- the same step size headless agent evaluation uses --
+    so a human playing through a level sees the exact physics a
+    headlessly-recorded agent playthrough would produce, rather than a
+    subtly different one from a rendering-only step size. At 60 FPS
+    (`clock.tick(60)` below) this runs slightly faster than real time
+    (`DT` * 60 =~1.2 simulated seconds per real second).
     """
     if render_config is None:
         render_config = RenderConfig()
