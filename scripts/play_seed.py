@@ -1,6 +1,7 @@
-"""Manual demo: play one round via `rendering.renderer.run_round`.
-
-Click-drag to aim/shoot the next queued sphere; wait for the field to
+"""Manual demo: play a specific batch-run seed yourself, live, no agent
+pre-simulation involved -- same generation parameters as
+scripts/agent_batch_timing.py, so it's the exact same level agents 44/49
+etc. were evaluated on. Click-drag to aim/shoot; wait for the field to
 settle before the next drag is accepted. Reset restarts the same level.
 """
 
@@ -9,23 +10,23 @@ from sphere_merger.physics.boundary import Boundary
 from sphere_merger.physics.vector import Vector2
 from sphere_merger.rendering.renderer import run_round
 
-FIELD = Boundary(x_min=-8.0, x_max=8.0, y_min=-8.0, y_max=8.0)
-# Bottom-left corner -- shots go straight in along the field instead of
-# from a specific spawn height (there is no height any more).
+SEED = 44
+
+FIELD = Boundary(x_min=-6.0, x_max=6.0, y_min=-6.0, y_max=6.0)
 SPAWN_MARGIN = 1.0
 SPAWN = Vector2(FIELD.x_min + SPAWN_MARGIN, FIELD.y_min + SPAWN_MARGIN)
 
 LEVEL = generate_random_level(
-    seed=42,
+    seed=SEED,
     boundary=FIELD,
     spawn_position=SPAWN,
-    target_score=50,
-    initial_sphere_count=8,
-    shot_count=10,
+    target_score=999,
+    initial_sphere_count=6,
+    shot_count=3,
     level_range=(0, 2),
 )
 
 if __name__ == "__main__":
     final_state = run_round(LEVEL)
-    print(f"Score: {final_state.score} / {LEVEL.target_score}")
+    print(f"Seed {SEED} -- Score: {final_state.score} / {LEVEL.target_score}")
     print("Gewonnen!" if final_state.is_won else "Verloren.")

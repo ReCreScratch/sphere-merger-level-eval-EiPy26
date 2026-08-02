@@ -12,9 +12,9 @@ import time
 from sphere_merger.physics.boundary import Boundary
 from sphere_merger.physics.engine import PhysicsConfig, step
 from sphere_merger.physics.sphere import Sphere
-from sphere_merger.physics.vector import Vector3
+from sphere_merger.physics.vector import Vector2
 
-FIELD = Boundary(x_min=-8.0, x_max=8.0, y_min=-8.0, y_max=8.0, z_min=0.0)
+FIELD = Boundary(x_min=-8.0, x_max=8.0, y_min=-8.0, y_max=8.0)
 SPHERE_COUNT = 30
 SIMULATED_SECONDS = 30.0
 DT = 0.01
@@ -28,8 +28,9 @@ def _random_scenario() -> list[Sphere]:
         radius = rng.uniform(0.3, 0.6)
         x = rng.uniform(FIELD.x_min + radius, FIELD.x_max - radius)
         y = rng.uniform(FIELD.y_min + radius, FIELD.y_max - radius)
-        z = rng.uniform(radius, 6.0)
-        spheres.append(Sphere(Vector3(x, y, z), Vector3(0.0, 0.0, 0.0), radius=radius, level=0))
+        vx = rng.uniform(-2.0, 2.0)
+        vy = rng.uniform(-2.0, 2.0)
+        spheres.append(Sphere(Vector2(x, y), Vector2(vx, vy), radius=radius, level=0))
     return spheres
 
 

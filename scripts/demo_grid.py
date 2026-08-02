@@ -7,17 +7,17 @@ Quick visual check of angle-sensitivity and of simulation independence
 from sphere_merger.physics.boundary import Boundary
 from sphere_merger.physics.engine import PhysicsConfig
 from sphere_merger.physics.sphere import Sphere
-from sphere_merger.physics.vector import Vector3
+from sphere_merger.physics.vector import Vector2
 from sphere_merger.rendering.grid_view import run_angle_sweep
 from sphere_merger.rendering.renderer import RenderConfig
 
-FIELD = Boundary(x_min=-10.0, x_max=10.0, y_min=-10.0, y_max=10.0, z_min=0.0)
+FIELD = Boundary(x_min=-10.0, x_max=10.0, y_min=-10.0, y_max=10.0)
 
 SPHERES = [
-    Sphere(Vector3(0.0, 0.0, 0.5), Vector3(0.0, 0.0, 0.0), radius=0.5, level=0),
-    Sphere(Vector3(3.0, 2.0, 0.6), Vector3(0.0, 0.0, 0.0), radius=0.6, level=1),
-    Sphere(Vector3(-2.5, -3.0, 0.5), Vector3(0.0, 0.0, 0.0), radius=0.5, level=0),
-    Sphere(Vector3(4.0, -3.5, 0.7), Vector3(0.0, 0.0, 0.0), radius=0.7, level=2),
+    Sphere(Vector2(0.0, 0.0), Vector2(0.0, 0.0), radius=0.5, level=0),
+    Sphere(Vector2(3.0, 2.0), Vector2(0.0, 0.0), radius=0.6, level=1),
+    Sphere(Vector2(-2.5, -3.0), Vector2(0.0, 0.0), radius=0.5, level=0),
+    Sphere(Vector2(4.0, -3.5), Vector2(0.0, 0.0), radius=0.7, level=2),
 ]
 SHOT_SPHERE_INDEX = 0
 

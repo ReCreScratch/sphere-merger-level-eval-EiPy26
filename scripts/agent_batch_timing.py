@@ -1,8 +1,10 @@
 """Timing check: play LEVEL_COUNT random levels with greedy and lookahead,
 each timed individually, to measure whether/how far a much larger batch
-(the eventual goal: ~1000 levels) is practical. Afterwards, saves the top 3
-levels by greedy/lookahead score gap to the interesting-levels store and
-replays them side by side.
+(the eventual goal: ~1000 levels) is practical. Saves minimal info (seed +
+scores, not shots) for every level played -- enough to revisit any of them
+later, not just the standouts -- to the interesting-levels store.
+Afterwards, replays the top TOP_N by greedy/lookahead score gap side by
+side.
 
 Progress bar (pygame, same pattern as demo_find_divergence_live.py) is
 drawn once per level, not per simulation step -- negligible next to the
@@ -26,25 +28,27 @@ from sphere_merger.agents.runner import (
     prepare_native_batch_worker,
     record_playthrough,
 )
-from sphere_merger.game.interesting_levels import save_level
-from sphere_merger.game.level import LevelDefinition, generate_random_level, radius_for_level
+from sphere_merger.game.interesting_levels import save_run
+from sphere_merger.game.level import LevelDefinition, generate_random_level
 from sphere_merger.physics.boundary import Boundary
 from sphere_merger.physics.engine import native_backend
-from sphere_merger.physics.vector import Vector3
+from sphere_merger.physics.vector import Vector2
 from sphere_merger.rendering.agent_grid import run_agent_grid
 from sphere_merger.rendering.renderer import RenderConfig
 
-BACKEND: Literal["python", "rust"] = "rust"
-TOP_N = 3
+# "rust" is temporarily unavailable: the native extension hasn't been
+# ported to the 2D/no-gravity physics model yet (see
+# docs/physics_optimizations.md) -- physics.engine.step's native branch
+# raises NotImplementedError until that lands.
+BACKEND: Literal["python", "rust"] = "python"
+TOP_N = 9
 SOURCE_SCRIPT = f"agent_batch_timing.py[{BACKEND}]"
 
-FIELD = Boundary(x_min=-6.0, x_max=6.0, y_min=-6.0, y_max=6.0, z_min=0.0)
+FIELD = Boundary(x_min=-6.0, x_max=6.0, y_min=-6.0, y_max=6.0)
 SPAWN_MARGIN = 1.0
-SPAWN = Vector3(
-    FIELD.x_min + SPAWN_MARGIN, FIELD.y_min + SPAWN_MARGIN, FIELD.z_min + radius_for_level(0)
-)
+SPAWN = Vector2(FIELD.x_min + SPAWN_MARGIN, FIELD.y_min + SPAWN_MARGIN)
 SHOT_SPEED = 20.0
-LEVEL_COUNT = 20
+LEVEL_COUNT = 250
 
 WINDOW_SIZE = (900, 300)
 BAR_COLOR = (90, 160, 220)
@@ -58,7 +62,7 @@ def _build_level(seed: int) -> LevelDefinition:
         boundary=FIELD,
         spawn_position=SPAWN,
         target_score=999,
-        initial_sphere_count=6,
+        initial_sphere_count=5,
         shot_count=2,
         level_range=(0, 2),
     )
@@ -151,10 +155,40 @@ if __name__ == "__main__":
     est_1000_min = avg_lookahead * 1000 / 60
     print(f"lookahead: {avg_lookahead:.2f}s/Level -> ~{est_1000_min:.0f} min fuer 1000 Level")
 
+    gaps = [abs(entry[2] - entry[5]) for entry in per_level]
+    print(f"gap: avg {sum(gaps) / len(gaps):.2f}, min {min(gaps)}, max {max(gaps)}")
+
+    save_run(
+        meta={
+            "source_script": SOURCE_SCRIPT,
+            "field": {
+                "x_min": FIELD.x_min,
+                "x_max": FIELD.x_max,
+                "y_min": FIELD.y_min,
+                "y_max": FIELD.y_max,
+            },
+            "spawn_margin": SPAWN_MARGIN,
+            "target_score": 999,
+            "initial_sphere_count": 5,
+            "shot_count": 2,
+            "level_range": [0, 2],
+            "shot_speed": SHOT_SPEED,
+            "found_at": date.today().isoformat(),
+        },
+        levels=[
+            {
+                "seed": seed,
+                "greedy_score": greedy_score,
+                "lookahead_score": lookahead_score,
+                "gap": abs(greedy_score - lookahead_score),
+            }
+            for seed, _, greedy_score, _, _, lookahead_score, _ in per_level
+        ],
+    )
+
     top = sorted(per_level, key=lambda entry: abs(entry[2] - entry[5]), reverse=True)[:TOP_N]
     print(f"\nTop {TOP_N} nach Score-Differenz:")
 
-    found_at = date.today().isoformat()
     cells: dict[str, tuple[LevelDefinition, list[tuple[float, float]]]] = {}
     for (
         seed,
@@ -168,32 +202,8 @@ if __name__ == "__main__":
         gap = abs(greedy_score - lookahead_score)
         print(f"  seed {seed}: greedy={greedy_score} lookahead={lookahead_score} (gap {gap})")
 
-        save_level(
-            {
-                "seed": seed,
-                "source_script": SOURCE_SCRIPT,
-                "field": {
-                    "x_min": FIELD.x_min,
-                    "x_max": FIELD.x_max,
-                    "y_min": FIELD.y_min,
-                    "y_max": FIELD.y_max,
-                    "z_min": FIELD.z_min,
-                },
-                "spawn_margin": SPAWN_MARGIN,
-                "target_score": 999,
-                "initial_sphere_count": 6,
-                "shot_count": 2,
-                "level_range": [0, 2],
-                "shot_speed": SHOT_SPEED,
-                "greedy_score": greedy_score,
-                "lookahead_score": lookahead_score,
-                "gap": gap,
-                "found_at": found_at,
-            }
-        )
-
         level = _build_level(seed)
         cells[f"seed {seed} / greedy ({greedy_score})"] = (level, greedy_shots)
         cells[f"seed {seed} / lookahead ({lookahead_score})"] = (level, lookahead_shots)
 
-    run_agent_grid(cells, columns=2, render_config=RenderConfig(window_size=(1200, 900)))
+    run_agent_grid(cells, columns=6, render_config=RenderConfig(window_size=(1800, 1000)))

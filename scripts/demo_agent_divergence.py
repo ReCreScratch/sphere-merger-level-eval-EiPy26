@@ -13,17 +13,15 @@ Starts paused on the level's initial layout; Play replays both recorded
 playthroughs side by side, Reset returns to the paused layout.
 """
 
-from sphere_merger.game.level import generate_random_level, radius_for_level
+from sphere_merger.game.level import generate_random_level
 from sphere_merger.physics.boundary import Boundary
-from sphere_merger.physics.vector import Vector3
+from sphere_merger.physics.vector import Vector2
 from sphere_merger.rendering.agent_grid import run_agent_grid
 from sphere_merger.rendering.renderer import RenderConfig
 
-FIELD = Boundary(x_min=-6.0, x_max=6.0, y_min=-6.0, y_max=6.0, z_min=0.0)
+FIELD = Boundary(x_min=-6.0, x_max=6.0, y_min=-6.0, y_max=6.0)
 SPAWN_MARGIN = 1.0
-SPAWN = Vector3(
-    FIELD.x_min + SPAWN_MARGIN, FIELD.y_min + SPAWN_MARGIN, FIELD.z_min + radius_for_level(0)
-)
+SPAWN = Vector2(FIELD.x_min + SPAWN_MARGIN, FIELD.y_min + SPAWN_MARGIN)
 SHOT_SPEED = 20.0
 SEED = 0
 
