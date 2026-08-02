@@ -11,6 +11,7 @@ import deal
 from sphere_merger.agents.base import Agent
 from sphere_merger.game.level import LevelDefinition
 from sphere_merger.game.round import RoundState, play_shot, start_round
+from sphere_merger.physics.engine import enable_native_backend
 
 
 def disable_contracts_in_worker() -> None:
@@ -22,6 +23,20 @@ def disable_contracts_in_worker() -> None:
     workers spawned from it, since `deal`'s switch is per-process state.
     """
     deal.disable(warn=False)
+
+
+def prepare_native_batch_worker() -> None:
+    """Combined `ProcessPoolExecutor` `initializer`: disables `deal`
+    contracts and switches physics to the native Rust backend, both for
+    one worker process.
+
+    Use instead of `disable_contracts_in_worker` when a batch run should
+    use `physics.engine.native_backend()` (see its docstring for why the
+    switch is process-global and needs its own initializer per worker,
+    same reasoning as `deal`'s).
+    """
+    disable_contracts_in_worker()
+    enable_native_backend()
 
 
 @contextmanager
