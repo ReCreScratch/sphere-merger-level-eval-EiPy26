@@ -27,6 +27,9 @@ letzten Lauf zu überschreiben.
 | `8b` | 8 | 2 |
 | `5b` | 5 | 2 |
 | `6b_3s` | 6 | 3 |
+| `10b_2s` | 10 | 2 |
+| `5b_3s`, `8b_3s`, `10b_3s` | 5 / 8 / 10 | 3 |
+| `5b_4s`, `8b_4s`, `10b_4s` | 5 / 8 / 10 | 4 |
 
 `name` ist der Dateiname-Stamm und lautet standardmäßig `<n>b_<s>s`. Die
 ersten beiden Läufe stammen aus der Zeit, als die Schusszahl noch fix 2
@@ -77,6 +80,35 @@ Ergebnisse der anderen Regimes.
 Metriken-Diskussion im Chat): Leerlauf-Schüsse (Einträge mit `[]`),
 Erster-Merge-Index, Merges-pro-Schuss-Verteilung. Bewusst nicht redundant
 mitgespeichert.
+
+### Zusätzliche Felder aus `long_run.py`
+
+Läufe von `scripts/long_run.py` (alles außer `8b`, `5b`, `6b_3s`)
+schreiben zusätzlich den **Feldzustand nach jedem Schuss**. `meta` trägt
+dort außerdem `random_sample_count` und `level_count`.
+
+| Feld | Typ | Bedeutung |
+|---|---|---|
+| `greedy_states` | list[list[[x, y, level]]] | pro Schuss der ausgeruhte Feldzustand danach: eine Liste aller Kugeln als `[x, y, level]`, auf 3 Nachkommastellen gerundet |
+| `lookahead_states` | list[list[[x, y, level]]] | analog für Lookahead |
+| `random0_shots` / `random0_states` | wie oben | dasselbe für Random-Sample 0. Nur dieses eine der 20 Samples -- alle zu speichern wäre die zehnfache Datenmenge für eine Baseline, bei der nur die Score-Verteilung zählt |
+
+Nicht gespeichert, weil ableitbar oder konstant: **Radius** (folgt aus
+`level` über `radius_for_level`) und **Geschwindigkeit** (nach dem Settle
+per Definition ~0).
+
+Wozu die Zustände da sind: Mittrunden-Stellungen werden analysierbar
+("wie sieht ein Level aus, während ein Schuss vorbereitet wird"), ohne
+den Agenten erneut laufen zu lassen. Vor allem aber lässt sich damit eine
+*kürzere* Runde aus einer längeren rekonstruieren: Schuss 1 einer
+3-Schuss-Runde ist bei gleichem Seed **identisch** mit Schuss 1 der
+2-Schuss-Runde (`generate_random_level` zieht die Schuss-Queue der Reihe
+nach, der Präfix stimmt also überein, und Lookaheads 2-Ply-Suche stellt
+für Schuss 1 exakt dieselbe Frage). Schuss 2 ist es *nicht* -- in der
+kurzen Runde ist er der letzte und fällt auf Sofortgewinn zurück. Aus dem
+gespeicherten Zustand nach Schuss 1 kostet die echte 2-Schuss-Lösung
+aber nur noch einen 1-Ply-Sweep (~91 Simulationen statt ~8400), also
+etwa 1 % eines Levels.
 
 ## `data/shrunk_levels_<name>.json` (shrink_top_levels.py)
 

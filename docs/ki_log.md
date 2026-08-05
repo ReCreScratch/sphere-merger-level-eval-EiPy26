@@ -256,3 +256,23 @@ abgewichen.
   die Schusszahl beschriftet -- „6 Kugeln" allein unterscheidet den neuen
   Lauf nicht mehr eindeutig von einem künftigen 6-Kugel-Lauf mit anderer
   Schusszahl.
+- `scripts/long_run.py` (neu) plus `game/checkpoint.py` (neu): langer,
+  unbeaufsichtigter Lauf über neun Regime (5/8/10 Kugeln × 2/3/4
+  Schüsse). Drei Eigenschaften, die alle aus "läuft Stunden statt
+  Minuten" folgen: (1) die Regime laufen **verschränkt** in Runden statt
+  nacheinander, weil ein Abbruch sonst die späteren Regime leer ließe --
+  45/30/25 % der Runde je Schusszahl; (2) jedes fertige Level wird sofort
+  als JSONL-Zeile weggeschrieben, Speicher bleibt damit konstant und ein
+  Abbruch kostet höchstens das laufende Level; (3) Ctrl-C und die Datei
+  `data/STOP` beenden geordnet mit Finalisierung, ein gestorbener
+  Worker-Pool wird neu aufgesetzt statt den Lauf zu beenden, und Windows
+  wird per `SetThreadExecutionState` am Einschlafen gehindert.
+- `ShotRecord` um `spheres_after` erweitert: Feldzustand nach jedem
+  Schuss (x, y, level; Radius folgt aus dem Level, Geschwindigkeit ist
+  nach dem Settle ~0). Nutzerwunsch, für spätere Analysen von
+  Mittrunden-Stellungen. Beim Prüfen der Nutzerannahme "damit kriegen wir
+  die 2-Schuss-Lösung gratis" kam heraus: nur zur Hälfte richtig --
+  Schuss 1 ist bei gleichem Seed identisch (Queue-Präfix stimmt überein),
+  Schuss 2 nicht, weil er in der kurzen Runde der letzte ist und auf
+  Sofortgewinn zurückfällt. Aus dem gespeicherten Zustand ist er aber für
+  ~1 % der Kosten nachrechenbar. In `docs/data_schema.md` festgehalten.

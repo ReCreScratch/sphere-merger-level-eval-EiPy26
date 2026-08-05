@@ -15,3 +15,9 @@ native/*/target/
 
 # generierte Artefakte (scripts/build_dashboard.py)
 build/
+
+# Zwischenstaende langer Laeufe (scripts/long_run.py) -- die finalisierten
+# data/*.json sind das Ergebnis, die Checkpoints nur der Weg dorthin
+data/checkpoints/
+data/long_run.log
+data/STOP

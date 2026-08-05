@@ -82,12 +82,24 @@ class ShotRecord:
     collapsing it into a single final score/combo means per-shot metrics
     (score curve, merge cadence, dead shots, ...) can be read off later
     without a second simulation pass.
+
+    `spheres_after` is the settled field the shot left behind, as
+    (x, y, level) per sphere. Velocity is dropped because the field is at
+    rest by definition at that point, and the radius follows from the
+    level (`radius_for_level`) -- keeping either would store a constant.
+    It is what makes mid-round positions analysable later ("what does a
+    level look like when a shot is being set up") without replaying the
+    agent, and it is what lets a shorter round be reconstructed from a
+    longer one: the state after shot 1 of a 3-shot round is exactly the
+    state after shot 1 of the 2-shot round on the same seed, so the
+    2-shot answer needs one 1-ply sweep from here rather than a rerun.
     """
 
     angle: float
     speed: float
     score_after: int
     merged_levels: list[int]
+    spheres_after: list[tuple[float, float, int]]
 
 
 def record_playthrough(level: LevelDefinition, agent: Agent) -> list[ShotRecord]:
@@ -105,7 +117,15 @@ def record_playthrough(level: LevelDefinition, agent: Agent) -> list[ShotRecord]
         while not state.is_over:
             angle, speed = agent.choose_shot(state)
             merged_levels = play_shot(state, angle, speed)
-            records.append(ShotRecord(angle, speed, state.score, merged_levels))
+            records.append(
+                ShotRecord(
+                    angle,
+                    speed,
+                    state.score,
+                    merged_levels,
+                    [(s.position.x, s.position.y, s.level) for s in state.spheres],
+                )
+            )
     return records
 
 

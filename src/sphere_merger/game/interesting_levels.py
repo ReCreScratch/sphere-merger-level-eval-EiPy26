@@ -73,6 +73,13 @@ RUNS: tuple[RunConfig, ...] = (
     RunConfig(sphere_count=8, shot_count=2, slug="8b"),
     RunConfig(sphere_count=5, shot_count=2, slug="5b"),
     RunConfig(sphere_count=6, shot_count=3),
+    RunConfig(sphere_count=10, shot_count=2),
+    RunConfig(sphere_count=5, shot_count=3),
+    RunConfig(sphere_count=8, shot_count=3),
+    RunConfig(sphere_count=10, shot_count=3),
+    RunConfig(sphere_count=5, shot_count=4),
+    RunConfig(sphere_count=8, shot_count=4),
+    RunConfig(sphere_count=10, shot_count=4),
 )
 
 

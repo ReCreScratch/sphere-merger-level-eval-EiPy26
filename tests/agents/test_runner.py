@@ -99,7 +99,9 @@ def test_shrink_to_used_spheres_keeps_anything_used_by_any_agent(
 
     def fake_record_playthrough(level: LevelDefinition, agent: object) -> list[ShotRecord]:
         angle = 1.0 if agent is agent_a else 2.0
-        return [ShotRecord(angle=angle, speed=0.0, score_after=0, merged_levels=[])]
+        return [
+            ShotRecord(angle=angle, speed=0.0, score_after=0, merged_levels=[], spheres_after=[])
+        ]
 
     def fake_touched(level: LevelDefinition, shots: list[tuple[float, float]]) -> set[int]:
         if len(level.initial_spheres) != 3:
@@ -148,7 +150,7 @@ def test_shrink_to_used_spheres_checks_fixed_playthroughs_once_and_iterated_agen
     fixed_check_sizes: list[int] = []
 
     def fake_record_playthrough(level: LevelDefinition, agent: object) -> list[ShotRecord]:
-        return [ShotRecord(angle=1.0, speed=1.0, score_after=0, merged_levels=[])]
+        return [ShotRecord(angle=1.0, speed=1.0, score_after=0, merged_levels=[], spheres_after=[])]
 
     def fake_touched(level: LevelDefinition, shots: list[tuple[float, float]]) -> set[int]:
         if shots == fixed_marker:
