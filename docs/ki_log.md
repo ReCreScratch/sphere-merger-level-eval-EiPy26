@@ -208,3 +208,9 @@ abgewichen.
   jetzt ein `ShrinkResult` zurück, das diese Playthroughs mitliefert,
   statt sie zu verwerfen -- kein Verhaltensunterschied, nur die
   dreifache Neuberechnung entfernt. Details in `docs/level_shrinking.md`.
+- `rendering/level_compare.py` (neu) + `scripts/browse_interesting_levels.py`:
+  Side-by-Side-Ansicht (pygame) für Original- vs. geshrinktes Level auf
+  einer handverlesenen Seed-Liste aus `data/shrunk_levels.json` -- Auswahl
+  nach Auffälligkeit (höchster Gap, größte Gap-Zunahme/-Abnahme,
+  aggressivstes Shrinking, Combo-Rekord), nicht nach einer einzelnen
+  Metrik sortiert.
