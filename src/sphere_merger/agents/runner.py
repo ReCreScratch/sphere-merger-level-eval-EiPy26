@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from contextlib import contextmanager
-from dataclasses import replace
+from dataclasses import dataclass, replace
 
 import deal
 
@@ -104,34 +104,85 @@ def record_shots(level: LevelDefinition, agent: Agent) -> list[tuple[float, floa
     return record_playthrough(level, agent)[0]
 
 
-def shrink_to_used_spheres(level: LevelDefinition, agents: list[Agent]) -> LevelDefinition:
-    """Iteratively drop initial spheres that none of `agents` ever touch.
+Playthrough = tuple[list[tuple[float, float]], int, int]
+"""One `record_playthrough` result: shots, score, longest combo chain."""
 
-    Re-simulates fresh after every removal pass -- dropping a sphere can
-    change which shots an agent picks on the smaller field, so a
-    touched-set computed before the drop can't be trusted for what comes
-    after (see docs/level_shrinking.md). Keeps going until a pass finds
-    nothing left to drop.
 
-    Cheap by construction: one run per agent per pass, not one run per
-    single-sphere trial like the earlier gap-preserving search this
-    replaced -- practical to run over an entire batch, not just its most
-    divergent seeds. Doesn't check whether the score gap changed at all: a
-    shrinking gap here just means the level was easier than its original
-    score suggested, not a failure -- and an agent finding a genuinely
-    different, better strategy on the smaller field is an accepted side
-    effect, never searched for.
+@dataclass(frozen=True)
+class ShrinkResult:
+    """`shrink_to_used_spheres`'s return value.
+
+    Carries the iterated agents' playthroughs the shrink already recorded
+    internally (`original_iterated_playthroughs`/`final_iterated_playthroughs`,
+    before vs. after shrinking) so callers wanting before/after scores don't
+    need to re-simulate them. `fixed_playthroughs` isn't echoed back here --
+    the caller already had those (see `shrink_to_used_spheres`).
+    """
+
+    level: LevelDefinition
+    original_iterated_playthroughs: list[Playthrough]
+    final_iterated_playthroughs: list[Playthrough]
+
+
+def shrink_to_used_spheres(
+    level: LevelDefinition,
+    iterated_agents: list[Agent],
+    fixed_playthroughs: list[Playthrough],
+) -> ShrinkResult:
+    """Iteratively drop initial spheres that none of `iterated_agents` ever
+    touch, nor any of `fixed_playthroughs`.
+
+    `iterated_agents` are cheap agents (e.g. greedy) that get re-simulated
+    fresh every removal pass, since dropping a sphere can change which
+    shots they pick on the smaller field -- a touched-set computed before
+    the drop can't be trusted for what comes after (see
+    docs/level_shrinking.md). `fixed_playthroughs` are already-recorded
+    `record_playthrough` results *on `level`, unmodified* for expensive
+    agents (e.g. lookahead's near-exhaustive 2-ply search) -- passed in
+    rather than re-simulated here, since a caller processing many levels
+    from a prior batch run (see `agent_batch_timing.py`) already has these
+    shots and re-running the search again would repeat its most expensive
+    part for nothing. Their touched set is carried forward across removal
+    passes (remapped through the index shifts each drop causes) instead of
+    being recomputed every time, trading the small risk of missing a
+    sphere that only becomes newly safe to drop after several rounds of
+    `iterated_agents`-driven shrinking for a large speed win.
+
+    Keeps going until a pass finds nothing left to drop. Doesn't check
+    whether the score gap changed at all: a shrinking gap here just means
+    the level was easier than its original score suggested, not a failure
+    -- and an agent finding a genuinely different, better strategy on the
+    smaller field is an accepted side effect, never searched for.
     """
     current = level
+    fixed_touched: set[int] = set()
+    for shots, _score, _combo in fixed_playthroughs:
+        fixed_touched |= touched_sphere_indices(level, shots)
+
+    original_iterated_playthroughs: list[Playthrough] | None = None
     while True:
-        touched: set[int] = set()
-        for agent in agents:
-            shots = record_shots(current, agent)
+        touched = set(fixed_touched)
+        pass_playthroughs: list[Playthrough] = []
+        for agent in iterated_agents:
+            shots, score, combo = record_playthrough(current, agent)
             touched |= touched_sphere_indices(current, shots)
+            pass_playthroughs.append((shots, score, combo))
+        if original_iterated_playthroughs is None:
+            original_iterated_playthroughs = pass_playthroughs
 
         untouched = set(range(len(current.initial_spheres))) - touched
         if not untouched:
-            return current
+            return ShrinkResult(
+                level=current,
+                original_iterated_playthroughs=original_iterated_playthroughs,
+                final_iterated_playthroughs=pass_playthroughs,
+            )
 
-        spheres = [sphere for i, sphere in enumerate(current.initial_spheres) if i not in untouched]
+        kept_indices = [i for i in range(len(current.initial_spheres)) if i not in untouched]
+        spheres = [current.initial_spheres[i] for i in kept_indices]
+        fixed_touched = {
+            new_index
+            for new_index, old_index in enumerate(kept_indices)
+            if old_index in fixed_touched
+        }
         current = replace(current, initial_spheres=spheres)

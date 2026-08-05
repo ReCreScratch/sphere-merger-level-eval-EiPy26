@@ -92,8 +92,11 @@ def test_shrink_to_used_spheres_keeps_anything_used_by_any_agent(
     agent_a = _FixedAngleAgent()
     agent_b = _FixedAngleAgent()
 
-    def fake_record_shots(level: LevelDefinition, agent: object) -> list[tuple[float, float]]:
-        return [(1.0, 0.0)] if agent is agent_a else [(2.0, 0.0)]
+    def fake_record_playthrough(
+        level: LevelDefinition, agent: object
+    ) -> tuple[list[tuple[float, float]], int, int]:
+        shots = [(1.0, 0.0)] if agent is agent_a else [(2.0, 0.0)]
+        return shots, 0, 0
 
     def fake_touched(level: LevelDefinition, shots: list[tuple[float, float]]) -> set[int]:
         if len(level.initial_spheres) != 3:
@@ -102,10 +105,68 @@ def test_shrink_to_used_spheres_keeps_anything_used_by_any_agent(
             return set(range(len(level.initial_spheres)))
         return {0} if shots == [(1.0, 0.0)] else {1}
 
-    monkeypatch.setattr("sphere_merger.agents.runner.record_shots", fake_record_shots)
+    monkeypatch.setattr("sphere_merger.agents.runner.record_playthrough", fake_record_playthrough)
     monkeypatch.setattr("sphere_merger.agents.runner.touched_sphere_indices", fake_touched)
 
-    shrunk = shrink_to_used_spheres(_three_sphere_level(), [agent_a, agent_b])
+    result = shrink_to_used_spheres(
+        _three_sphere_level(), iterated_agents=[agent_a, agent_b], fixed_playthroughs=[]
+    )
 
-    assert len(shrunk.initial_spheres) == 2
-    assert {round(s.position.x) for s in shrunk.initial_spheres} == {0, 1}
+    assert len(result.level.initial_spheres) == 2
+    assert {round(s.position.x) for s in result.level.initial_spheres} == {0, 1}
+
+
+def _five_sphere_level() -> LevelDefinition:
+    boundary = Boundary(-5.0, 5.0, -5.0, 5.0)
+    return LevelDefinition(
+        boundary=boundary,
+        initial_spheres=[
+            Sphere(Vector2(float(i), 0.0), Vector2(0.0, 0.0), radius=0.5, level=0) for i in range(5)
+        ],
+        shot_queue=[0],
+        spawn_position=Vector2(0.0, 0.0),
+        target_score=999_999,
+    )
+
+
+def test_shrink_to_used_spheres_checks_fixed_playthroughs_once_and_iterated_agents_every_pass(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # index 0 is protected by a precomputed "fixed" playthrough (like a
+    # prior lookahead run's shots) whose touched-check runs exactly once,
+    # on the original 5-sphere level; the "iterated" agent (like greedy)
+    # touches {1, 2} on that first pass, but after 3 and 4 are dropped, its
+    # touched set shrinks to just {1} on the smaller field (simulating
+    # greedy finding a different, simpler shot once the removed spheres
+    # are out of the way) -- exposing index 2 as safe to drop too, on a
+    # second pass.
+    iterated_agent = _FixedAngleAgent()
+    fixed_marker = [(9.0, 9.0)]
+    iterated_marker = [(1.0, 1.0)]
+    fixed_check_sizes: list[int] = []
+
+    def fake_record_playthrough(
+        level: LevelDefinition, agent: object
+    ) -> tuple[list[tuple[float, float]], int, int]:
+        return iterated_marker, 0, 0
+
+    def fake_touched(level: LevelDefinition, shots: list[tuple[float, float]]) -> set[int]:
+        if shots == fixed_marker:
+            fixed_check_sizes.append(len(level.initial_spheres))
+            return {0}
+        return {1, 2} if len(level.initial_spheres) == 5 else {1}
+
+    monkeypatch.setattr("sphere_merger.agents.runner.record_playthrough", fake_record_playthrough)
+    monkeypatch.setattr("sphere_merger.agents.runner.touched_sphere_indices", fake_touched)
+
+    result = shrink_to_used_spheres(
+        _five_sphere_level(),
+        iterated_agents=[iterated_agent],
+        fixed_playthroughs=[(fixed_marker, 0, 0)],
+    )
+
+    assert len(result.level.initial_spheres) == 2
+    assert {round(s.position.x) for s in result.level.initial_spheres} == {0, 1}
+    # The fixed agent's touched-check only ever ran once, against the
+    # original 5-sphere level -- never re-simulated as the field shrank.
+    assert fixed_check_sizes == [5]

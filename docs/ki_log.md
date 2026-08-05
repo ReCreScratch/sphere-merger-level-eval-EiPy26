@@ -199,3 +199,12 @@ abgewichen.
   Suche nach besseren Alternativ-Strategien mehr. Alter Ansatz (`game/shrink.py`,
   zugehörige Tests, `scripts/shrink_interesting_level.py`, alte
   `data/shrunk_levels.json`) komplett gelöscht statt parallel gehalten.
+- Perf-Bug in `shrink_top_levels.py` gefunden (v2 lief trotzdem "extrem
+  lange"): drei der vier Playthroughs pro Level (Original-Greedy,
+  Original-Lookahead, finales Shrunk-Greedy) wurden ein zweites Mal
+  simuliert, obwohl `shrink_to_used_spheres` genau die schon intern
+  berechnet -- verdoppelte dabei ausgerechnet Lookaheads teuren
+  2-Ply-Sweep. Fix: `shrink_to_used_spheres` (`agents/runner.py`) gibt
+  jetzt ein `ShrinkResult` zurück, das diese Playthroughs mitliefert,
+  statt sie zu verwerfen -- kein Verhaltensunterschied, nur die
+  dreifache Neuberechnung entfernt. Details in `docs/level_shrinking.md`.

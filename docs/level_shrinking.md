@@ -59,3 +59,20 @@ unterwegs passiert sind -- Kurzfassung in `docs/ki_log.md`.
   und die alte `data/shrunk_levels.json` ersatzlos gelöscht -- keine
   Refactor-Leichen, komplett reproduzierbar durch Neulauf von
   `scripts/shrink_top_levels.py`.
+- **Perf-Bug gefunden (v2 lief trotzdem "extrem lange"):** `shrink_top_levels.py`
+  hat nach jedem `shrink_to_used_spheres`-Aufruf drei der vier Playthroughs
+  (Original-Greedy, Original-Lookahead, finales Shrunk-Greedy) ein zweites
+  Mal simuliert, obwohl `shrink_to_used_spheres` genau die schon intern
+  berechnet (erster/letzter Greedy-Pass, der einmalige Fixed-Agent-Lauf) --
+  nur Shrunk-Lookahead ist wirklich neu. Verdoppelte dabei ausgerechnet
+  Lookaheads teuren 2-Ply-Sweep. Fix: `shrink_to_used_spheres` gibt jetzt
+  ein `ShrinkResult` zurück, das diese Playthroughs mitliefert, statt sie
+  zu verwerfen -- kein Verhaltensunterschied, nur die dreifache Neuberechnung
+  entfernt.
+- **Offen, nicht umgesetzt:** `interesting_levels.json` speichert aus dem
+  1000-Level-Batch (`agent_batch_timing.py`) nur Scores, keine Shots --
+  deshalb muss `shrink_top_levels.py` Greedy/Lookahead für die Top-Kandidaten
+  komplett neu simulieren, obwohl `agent_batch_timing.py` das für alle 1000
+  Level bereits einmal getan hat. Größerer Umbau (Shots/Touched-Set schon im
+  Batch-Run mitschreiben und persistieren) als möglicher nächster Schritt
+  vermerkt, aber nicht angegangen.
