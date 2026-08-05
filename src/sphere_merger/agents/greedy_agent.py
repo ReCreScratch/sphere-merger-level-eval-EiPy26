@@ -9,6 +9,7 @@ from sphere_merger.agents.base import (
     ANGLE_RANGE_DEGREES,
     ANGLE_STEP_DEGREES,
     DEFAULT_SPEED,
+    EXECUTOR_CHUNKSIZE,
     candidate_angles,
     candidate_total_gain,
     simulate_shot,
@@ -58,7 +59,7 @@ class GreedyAgent:
         """Simulate every candidate angle one shot ahead, return the best."""
         args = [(state, angle, self._speed) for angle in self._angles]
         if self._executor is not None:
-            results = list(self._executor.map(_candidate_gain, args))
+            results = list(self._executor.map(_candidate_gain, args, chunksize=EXECUTOR_CHUNKSIZE))
         else:
             results = [_candidate_gain(a) for a in args]
 
@@ -69,7 +70,9 @@ class GreedyAgent:
 
         deeper_args = [(state, angle, self._speed, self._angles) for angle in tied]
         if self._executor is not None:
-            deeper_results = list(self._executor.map(candidate_total_gain, deeper_args))
+            deeper_results = list(
+                self._executor.map(candidate_total_gain, deeper_args, chunksize=EXECUTOR_CHUNKSIZE)
+            )
         else:
             deeper_results = [candidate_total_gain(a) for a in deeper_args]
         best_angle, _ = max(deeper_results, key=lambda result: result[1])

@@ -131,6 +131,20 @@ def keep_awake(enable: bool) -> None:
     ctypes.windll.kernel32.SetThreadExecutionState(flags)
 
 
+def random_playthrough(args: tuple[LevelDefinition, int, float]) -> list[ShotRecord]:
+    """One random baseline playthrough, for evaluation in a worker process.
+
+    Module-level (so it is picklable by reference) because the random
+    samples are worth parallelising: they are a fifth of a level's work
+    and used to be the one part that ran sequentially in the main process,
+    leaving fifteen of sixteen cores idle while they ran. Each sample is
+    independent and its agent's seed is fixed, so distributing them
+    changes nothing about the result.
+    """
+    level, seed, speed = args
+    return record_playthrough(level, RandomAgent(seed=seed, speed=speed))
+
+
 def round_size(run: RunConfig) -> int:
     """How many levels of `run` one round plays."""
     return max(1, round(LEVELS_PER_SPHERE_COUNT * SHOT_SPLIT[run.shot_count]))
@@ -296,14 +310,13 @@ def play_level(
             greedy_agent = GreedyAgent(speed=SHOT_SPEED, executor=pool.executor)
             lookahead_agent = LookaheadAgent(speed=SHOT_SPEED, executor=pool.executor)
 
-            random_scores: list[int] = []
-            random_first: list[ShotRecord] = []
-            for i in range(RANDOM_SAMPLE_COUNT):
-                sample = RandomAgent(seed=seed * RANDOM_SAMPLE_COUNT + i, speed=SHOT_SPEED)
-                records = record_playthrough(level, sample)
-                random_scores.append(final_score(records))
-                if i == 0:
-                    random_first = records
+            sample_args = [
+                (level, seed * RANDOM_SAMPLE_COUNT + i, SHOT_SPEED)
+                for i in range(RANDOM_SAMPLE_COUNT)
+            ]
+            samples = list(pool.executor.map(random_playthrough, sample_args, chunksize=1))
+            random_scores = [final_score(records) for records in samples]
+            random_first = samples[0]
 
             greedy = record_playthrough(level, greedy_agent)
             lookahead = record_playthrough(level, lookahead_agent)
@@ -319,7 +332,7 @@ def play_level(
     raise AssertionError("unerreichbar")
 
 
-def main(runs: tuple[RunConfig, ...]) -> None:
+def main(runs: tuple[RunConfig, ...], resume: bool = False) -> None:
     """Play rounds across `runs` until asked to stop, then finalise.
 
     The whole loop runs inside `native_backend()`: the workers get the
@@ -333,10 +346,17 @@ def main(runs: tuple[RunConfig, ...]) -> None:
     done: dict[str, int] = {run.name: 0 for run in runs}
 
     for run in runs:
-        batch[run.name].start(meta_for(run))
-        shrunk[run.name].start({**meta_for(run), "source_script": "long_run.py[shrink]"})
+        batch[run.name].start(meta_for(run), resume=resume)
+        shrunk[run.name].start(
+            {**meta_for(run), "source_script": "long_run.py[shrink]"}, resume=resume
+        )
+        if resume:
+            used[run.name] = batch[run.name].seeds()
+            done[run.name] = len(used[run.name])
 
     plan = ", ".join(f"{run.name}x{round_size(run)}" for run in runs)
+    if resume:
+        log(f"Fortsetzung: {sum(done.values())} Level bereits vorhanden")
     log(f"Start: {len(runs)} Regime, Runde = {plan}")
     log(f"Stoppen mit Ctrl-C oder: New-Item {STOP_FILE}")
 
@@ -388,13 +408,15 @@ def main(runs: tuple[RunConfig, ...]) -> None:
 
 
 if __name__ == "__main__":
-    selected = select_runs(sys.argv[1:]) if sys.argv[1:] else LONG_RUN_GRID
+    args = [a for a in sys.argv[1:] if a != "--resume"]
+    resuming = "--resume" in sys.argv[1:]
+    selected = select_runs(args) if args else LONG_RUN_GRID
     if STOP_FILE.exists():
         STOP_FILE.unlink()
     signal.signal(signal.SIGINT, _request_stop)
     keep_awake(True)
     try:
         with native_backend():
-            main(selected)
+            main(selected, resume=resuming)
     finally:
         keep_awake(False)

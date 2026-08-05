@@ -10,6 +10,7 @@ from sphere_merger.agents.base import (
     ANGLE_RANGE_DEGREES,
     ANGLE_STEP_DEGREES,
     DEFAULT_SPEED,
+    EXECUTOR_CHUNKSIZE,
     candidate_angles,
     candidate_total_gain,
 )
@@ -46,7 +47,9 @@ class LookaheadAgent:
         """Simulate two shots ahead for every candidate, return the best first shot."""
         args = [(state, angle, self._speed, self._angles) for angle in self._angles]
         if self._executor is not None:
-            results = list(self._executor.map(candidate_total_gain, args))
+            results = list(
+                self._executor.map(candidate_total_gain, args, chunksize=EXECUTOR_CHUNKSIZE)
+            )
         else:
             results = [candidate_total_gain(a) for a in args]
         best_angle, _ = max(results, key=lambda result: result[1])

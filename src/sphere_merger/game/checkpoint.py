@@ -46,8 +46,8 @@ class Checkpoint:
         self.lines_path = directory / f"{name}.jsonl"
         self.meta_path = directory / f"{name}.meta.json"
 
-    def start(self, meta: dict[str, Any]) -> None:
-        """Write `meta` and clear any previous lines for this run.
+    def start(self, meta: dict[str, Any], resume: bool = False) -> None:
+        """Write `meta` and, unless resuming, clear any previous lines.
 
         Truncating matters more than it looks: appending is the whole
         point of this class, so without it a new run of the same regime
@@ -55,10 +55,20 @@ class Checkpoint:
         dataset mixing two runs -- with a `meta` describing only the
         newer. A replaced run replaces both parts or neither, matching
         `save_run`'s wholesale semantics.
+
+        `resume=True` is the deliberate exception: the same run continuing
+        after an interruption, where mixing is exactly what is wanted. Only
+        valid when the parameters really are unchanged -- nothing here can
+        check that, so the caller has to mean it.
         """
         self.directory.mkdir(parents=True, exist_ok=True)
         self.meta_path.write_text(json.dumps(meta, indent=2) + "\n", encoding="utf-8")
-        self.lines_path.write_text("", encoding="utf-8")
+        if not resume:
+            self.lines_path.write_text("", encoding="utf-8")
+
+    def seeds(self) -> set[int]:
+        """Seeds already recorded -- so a resumed run does not replay them."""
+        return {record["seed"] for record in self.records()}
 
     def append(self, record: dict[str, Any]) -> None:
         """Append one finished level and flush it to disk.

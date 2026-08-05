@@ -26,6 +26,24 @@ DEFAULT_SPEED = 10.0
 ANGLE_RANGE_DEGREES = (0.0, 90.0)
 ANGLE_STEP_DEGREES = 1.0
 
+EXECUTOR_CHUNKSIZE = 4
+"""How many candidate angles an agent hands a worker per task.
+
+`Executor.map`'s default of one task per item is a bad fit here and was
+measurably worse than useless for `GreedyAgent`: its per-candidate work
+is a single `simulate_shot`, so with one candidate per task the pickling
+round-trip costs more than the simulation, and the parallel sweep ran
+*slower* than the same sweep done sequentially in the caller (0.089s vs
+0.062s measured; batching to 4 brings it to 0.018s). `LookaheadAgent`
+suffers far less -- each of its tasks already contains a full next-shot
+sweep -- but gains from batching too.
+
+Four is a compromise on the number of candidates (91 by default): large
+enough to amortise the round-trip, small enough that the resulting ~23
+chunks still spread over a 16-worker pool without leaving workers idle
+at the tail.
+"""
+
 
 class Agent(Protocol):
     """Picks the next queued shot's angle/speed from the current `state`."""
