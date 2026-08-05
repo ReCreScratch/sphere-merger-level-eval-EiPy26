@@ -72,40 +72,70 @@ def play_round(level: LevelDefinition, agent: Agent) -> RoundState:
     return state
 
 
-def record_playthrough(
-    level: LevelDefinition, agent: Agent
-) -> tuple[list[tuple[float, float]], int, int]:
-    """Play `level` with `agent`, recording each chosen (angle, speed) shot
-    alongside the final score and the longest combo chain seen.
+@dataclass(frozen=True)
+class ShotRecord:
+    """One shot's outcome within a `record_playthrough` run: the
+    (angle, speed) fired, the cumulative score right after it settled, and
+    which levels merged as a result (empty if none merged).
+
+    `play_shot` already computes all of this; keeping it instead of
+    collapsing it into a single final score/combo means per-shot metrics
+    (score curve, merge cadence, dead shots, ...) can be read off later
+    without a second simulation pass.
+    """
+
+    angle: float
+    speed: float
+    score_after: int
+    merged_levels: list[int]
+
+
+def record_playthrough(level: LevelDefinition, agent: Agent) -> list[ShotRecord]:
+    """Play `level` with `agent`, recording every shot's outcome.
 
     For replaying a playthrough later (e.g. animated in a rendered grid)
     without needing the agent -- or its per-shot candidate simulation --
-    live at render time.
-
-    The combo chain is the number of merges triggered by a single shot
-    (`play_shot`'s return value); the longest one across the whole
-    playthrough is a proxy for "did any one shot set off a big cascade" --
-    0 if no shot ever merged anything.
+    live at render time (`shots_of`), and for reading off summary stats
+    (`final_score`, `max_combo`) or per-shot ones directly from the
+    records without re-simulating.
     """
     state = start_round(level)
-    shots: list[tuple[float, float]] = []
-    max_combo = 0
+    records: list[ShotRecord] = []
     with contracts_disabled():
         while not state.is_over:
             angle, speed = agent.choose_shot(state)
-            shots.append((angle, speed))
             merged_levels = play_shot(state, angle, speed)
-            max_combo = max(max_combo, len(merged_levels))
-    return shots, state.score, max_combo
+            records.append(ShotRecord(angle, speed, state.score, merged_levels))
+    return records
+
+
+def shots_of(records: list[ShotRecord]) -> list[tuple[float, float]]:
+    """Just the (angle, speed) shots from `record_playthrough`'s result --
+    e.g. for replaying without the per-shot metrics."""
+    return [(record.angle, record.speed) for record in records]
+
+
+def final_score(records: list[ShotRecord]) -> int:
+    """The score after the last shot in `records` (0 if there were none)."""
+    return records[-1].score_after if records else 0
+
+
+def max_combo(records: list[ShotRecord]) -> int:
+    """The longest single-shot merge chain in `records` (0 if there were
+    none, or none merged anything) -- a proxy for "did any one shot set
+    off a big cascade"."""
+    return max((len(record.merged_levels) for record in records), default=0)
 
 
 def record_shots(level: LevelDefinition, agent: Agent) -> list[tuple[float, float]]:
     """Like `record_playthrough`, but for callers that only need the shots."""
-    return record_playthrough(level, agent)[0]
+    return shots_of(record_playthrough(level, agent))
 
 
 Playthrough = tuple[list[tuple[float, float]], int, int]
-"""One `record_playthrough` result: shots, score, longest combo chain."""
+"""shots, score, longest combo chain -- `shrink_to_used_spheres`'s summary
+of one `record_playthrough` run, e.g. as reconstructed from a prior batch
+run's saved scores rather than a live `list[ShotRecord]`."""
 
 
 @dataclass(frozen=True)
@@ -164,9 +194,10 @@ def shrink_to_used_spheres(
         touched = set(fixed_touched)
         pass_playthroughs: list[Playthrough] = []
         for agent in iterated_agents:
-            shots, score, combo = record_playthrough(current, agent)
+            records = record_playthrough(current, agent)
+            shots = shots_of(records)
             touched |= touched_sphere_indices(current, shots)
-            pass_playthroughs.append((shots, score, combo))
+            pass_playthroughs.append((shots, final_score(records), max_combo(records)))
         if original_iterated_playthroughs is None:
             original_iterated_playthroughs = pass_playthroughs
 

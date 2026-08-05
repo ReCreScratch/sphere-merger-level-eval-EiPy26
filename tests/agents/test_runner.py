@@ -2,7 +2,12 @@ from collections.abc import Iterator
 
 import pytest
 
-from sphere_merger.agents.runner import record_playthrough, shrink_to_used_spheres
+from sphere_merger.agents.runner import (
+    ShotRecord,
+    max_combo,
+    record_playthrough,
+    shrink_to_used_spheres,
+)
 from sphere_merger.game.level import LevelDefinition
 from sphere_merger.game.round import RoundState
 from sphere_merger.physics.boundary import Boundary
@@ -41,10 +46,10 @@ def test_record_playthrough_reports_longest_combo_across_shots(
         target_score=999_999,
     )
 
-    shots, _score, max_combo = record_playthrough(level, _FixedAngleAgent())
+    records = record_playthrough(level, _FixedAngleAgent())
 
-    assert len(shots) == 3
-    assert max_combo == 2
+    assert len(records) == 3
+    assert max_combo(records) == 2
 
 
 def test_record_playthrough_max_combo_is_zero_without_merges(
@@ -62,9 +67,9 @@ def test_record_playthrough_max_combo_is_zero_without_merges(
         target_score=999_999,
     )
 
-    _shots, _score, max_combo = record_playthrough(level, _FixedAngleAgent())
+    records = record_playthrough(level, _FixedAngleAgent())
 
-    assert max_combo == 0
+    assert max_combo(records) == 0
 
 
 def _three_sphere_level() -> LevelDefinition:
@@ -92,11 +97,9 @@ def test_shrink_to_used_spheres_keeps_anything_used_by_any_agent(
     agent_a = _FixedAngleAgent()
     agent_b = _FixedAngleAgent()
 
-    def fake_record_playthrough(
-        level: LevelDefinition, agent: object
-    ) -> tuple[list[tuple[float, float]], int, int]:
-        shots = [(1.0, 0.0)] if agent is agent_a else [(2.0, 0.0)]
-        return shots, 0, 0
+    def fake_record_playthrough(level: LevelDefinition, agent: object) -> list[ShotRecord]:
+        angle = 1.0 if agent is agent_a else 2.0
+        return [ShotRecord(angle=angle, speed=0.0, score_after=0, merged_levels=[])]
 
     def fake_touched(level: LevelDefinition, shots: list[tuple[float, float]]) -> set[int]:
         if len(level.initial_spheres) != 3:
@@ -142,13 +145,10 @@ def test_shrink_to_used_spheres_checks_fixed_playthroughs_once_and_iterated_agen
     # second pass.
     iterated_agent = _FixedAngleAgent()
     fixed_marker = [(9.0, 9.0)]
-    iterated_marker = [(1.0, 1.0)]
     fixed_check_sizes: list[int] = []
 
-    def fake_record_playthrough(
-        level: LevelDefinition, agent: object
-    ) -> tuple[list[tuple[float, float]], int, int]:
-        return iterated_marker, 0, 0
+    def fake_record_playthrough(level: LevelDefinition, agent: object) -> list[ShotRecord]:
+        return [ShotRecord(angle=1.0, speed=1.0, score_after=0, merged_levels=[])]
 
     def fake_touched(level: LevelDefinition, shots: list[tuple[float, float]]) -> set[int]:
         if shots == fixed_marker:

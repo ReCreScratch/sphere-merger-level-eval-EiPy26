@@ -7,7 +7,12 @@ from concurrent.futures import ProcessPoolExecutor
 
 from sphere_merger.agents.greedy_agent import GreedyAgent
 from sphere_merger.agents.lookahead_agent import LookaheadAgent
-from sphere_merger.agents.runner import prepare_native_batch_worker, record_playthrough
+from sphere_merger.agents.runner import (
+    final_score,
+    prepare_native_batch_worker,
+    record_playthrough,
+    shots_of,
+)
 from sphere_merger.game.level import LevelDefinition, generate_random_level
 from sphere_merger.physics.boundary import Boundary
 from sphere_merger.physics.engine import native_backend
@@ -42,12 +47,15 @@ if __name__ == "__main__":
         cells = {}
         for seed in SEEDS:
             level = _build_level(seed)
-            greedy_shots, greedy_score, _greedy_combo = record_playthrough(level, greedy)
-            lookahead_shots, lookahead_score, _lookahead_combo = record_playthrough(
-                level, lookahead
-            )
+            greedy_records = record_playthrough(level, greedy)
+            lookahead_records = record_playthrough(level, lookahead)
+            greedy_score = final_score(greedy_records)
+            lookahead_score = final_score(lookahead_records)
             print(f"seed {seed}: greedy={greedy_score} lookahead={lookahead_score}")
-            cells[f"seed {seed} / greedy ({greedy_score})"] = (level, greedy_shots)
-            cells[f"seed {seed} / lookahead ({lookahead_score})"] = (level, lookahead_shots)
+            cells[f"seed {seed} / greedy ({greedy_score})"] = (level, shots_of(greedy_records))
+            cells[f"seed {seed} / lookahead ({lookahead_score})"] = (
+                level,
+                shots_of(lookahead_records),
+            )
 
     run_agent_grid(cells, columns=2, render_config=RenderConfig(window_size=(1200, 900)))

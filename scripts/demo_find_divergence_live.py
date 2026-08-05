@@ -11,7 +11,12 @@ import pygame
 
 from sphere_merger.agents.greedy_agent import GreedyAgent
 from sphere_merger.agents.lookahead_agent import LookaheadAgent
-from sphere_merger.agents.runner import disable_contracts_in_worker, record_playthrough
+from sphere_merger.agents.runner import (
+    disable_contracts_in_worker,
+    final_score,
+    record_playthrough,
+    shots_of,
+)
 from sphere_merger.game.level import LevelDefinition, generate_random_level
 from sphere_merger.physics.boundary import Boundary
 from sphere_merger.physics.vector import Vector2
@@ -86,14 +91,21 @@ if __name__ == "__main__":
             _draw_search_progress(screen, font, seed, SEED_COUNT, seed)
 
             level = _build_level(seed)
-            greedy_shots, greedy_score, _greedy_combo = record_playthrough(level, greedy)
-            lookahead_shots, lookahead_score, _lookahead_combo = record_playthrough(
-                level, lookahead
-            )
+            greedy_records = record_playthrough(level, greedy)
+            lookahead_records = record_playthrough(level, lookahead)
+            greedy_score = final_score(greedy_records)
+            lookahead_score = final_score(lookahead_records)
             gap = abs(lookahead_score - greedy_score)
             if gap > best_gap:
                 best_gap = gap
-                best = (seed, level, greedy_shots, greedy_score, lookahead_shots, lookahead_score)
+                best = (
+                    seed,
+                    level,
+                    shots_of(greedy_records),
+                    greedy_score,
+                    shots_of(lookahead_records),
+                    lookahead_score,
+                )
 
     pygame.quit()
 
