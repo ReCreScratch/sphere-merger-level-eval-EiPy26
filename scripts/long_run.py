@@ -1,8 +1,31 @@
 """Long unattended batch run across several regimes at once, abortable at
 any moment without losing what it has already computed.
 
-Three differences to `agent_batch_timing.py`, all of them consequences of
+Four differences to `agent_batch_timing.py`, all of them consequences of
 running for hours rather than minutes:
+
+**One worker task is one whole level, not one candidate angle.** An
+earlier version of this script fanned a single level's candidate sweeps
+(greedy's, lookahead's, each random sample's) out across the whole pool
+and synchronised the main process after every shot -- measured at only
+~44-53% CPU utilisation, because every shot, every agent phase and every
+shrink pass was its own barrier (a 4-shot level has a dozen or more of
+these), and each one leaves the *entire* pool idle waiting for the
+slowest straggler before the next phase can even be dispatched.
+`play_level_task` instead computes an entire level -- baseline, greedy,
+lookahead, shrink -- sequentially inside one worker process with no
+executor of its own (`GreedyAgent`/`LookaheadAgent` already support this:
+no executor means a sequential sweep). Parallelism now comes from many
+*different* levels running in different workers at once, via
+`run_workload`'s rolling window of in-flight level tasks, kept full by
+submitting a replacement the instant one finishes. Measured directly
+against the barrier-per-shot design on the same regimes: +43% throughput
+on a cheap 2-shot regime, +29% on an expensive 4-shot one -- confirming
+this is a real win, not just busier-looking cores (an earlier estimate
+that guessed the 4-shot regime wouldn't benefit was wrong; it had
+extrapolated the old design's cost from a different regime instead of
+measuring it, and undercounted how many synchronisation barriers a
+longer round accumulates).
 
 **Interleaved, not sequential.** The regimes take turns in rounds of a few
 hundred levels each instead of running one to completion before the next
@@ -11,25 +34,31 @@ leave the later regimes with nothing at all, and regimes that cannot be
 compared to each other are worth much less than a smaller set that can.
 Within one sphere count the shot counts get 45/30/25 percent of the round
 (`SHOT_SPLIT`), so the shorter, cheaper rounds accumulate the most levels.
+A round's items are shuffled across regimes before being fed into the
+rolling window, so an expensive 4-shot level never blocks a worker that
+could otherwise be finishing several cheap 2-shot ones.
 
 **Checkpointed, not held in memory.** Every finished level is appended to
 its regime's checkpoint (`game.checkpoint`) the moment it is done. Peak
 memory is therefore flat no matter how long the run goes, and an abort
-costs at most the level in flight.
+costs at most the handful of levels still in flight in the rolling
+window (bounded by the worker count) rather than the whole round.
 
 **It expects to be interrupted.** Ctrl-C, or creating the file
-`data/STOP`, finishes the current level, writes it, finalises every
-regime's checkpoint into its normal data file and exits. A crashed worker
-process is caught and the pool rebuilt rather than taking the run down
-with it, and Windows is asked to stay awake for the duration -- an
-unattended run is lost just as thoroughly to a sleeping laptop as to a
-crash.
+`data/STOP`, stops submitting new level tasks, lets the ones already in
+flight finish, finalises every regime's checkpoint into its normal data
+file, and exits. A crashed worker is caught, the pool rebuilt, and every
+level that was in flight on the dead pool is re-queued with a fresh seed
+(the seed it was given is simply burned rather than tracked for retry --
+simpler, and one wasted seed out of a billion costs nothing). Windows is
+asked to stay awake for the duration -- an unattended run is lost just as
+thoroughly to a sleeping laptop as to a crash.
 
-Shrinking runs per round too, right after the levels it belongs to, so the
-shrink dataset is never behind the batch one and both stay consistent at
-whatever point the run is stopped.
+Shrinking runs per level too, right alongside the level it belongs to, so
+the shrink dataset is never behind the batch one and both stay consistent
+at whatever point the run is stopped.
 
-Seeds are drawn fresh per round from a per-regime pool, and already-used
+Seeds are drawn fresh per level from a per-regime pool, and already-used
 seeds are tracked so a long run never plays the same level twice within a
 regime.
 
@@ -40,11 +69,12 @@ runs the nine regimes of `LONG_RUN_GRID`.
 from __future__ import annotations
 
 import ctypes
+import os
 import random
 import signal
 import sys
 import time
-from concurrent.futures import BrokenExecutor, ProcessPoolExecutor
+from concurrent.futures import BrokenExecutor, Future, ProcessPoolExecutor, wait
 from datetime import date, datetime
 from pathlib import Path
 from types import FrameType
@@ -131,18 +161,10 @@ def keep_awake(enable: bool) -> None:
     ctypes.windll.kernel32.SetThreadExecutionState(flags)
 
 
-def random_playthrough(args: tuple[LevelDefinition, int, float]) -> list[ShotRecord]:
-    """One random baseline playthrough, for evaluation in a worker process.
-
-    Module-level (so it is picklable by reference) because the random
-    samples are worth parallelising: they are a fifth of a level's work
-    and used to be the one part that ran sequentially in the main process,
-    leaving fifteen of sixteen cores idle while they ran. Each sample is
-    independent and its agent's seed is fixed, so distributing them
-    changes nothing about the result.
-    """
-    level, seed, speed = args
-    return record_playthrough(level, RandomAgent(seed=seed, speed=speed))
+MAX_WORKERS = os.cpu_count() or 4
+"""Worker count for the pool, and the rolling window's target number of
+in-flight level tasks (see `run_workload`) -- one task per worker keeps
+every worker continuously busy without overprovisioning the queue."""
 
 
 def round_size(run: RunConfig) -> int:
@@ -271,14 +293,15 @@ class Pool:
 
     A `BrokenProcessPool` in the middle of a multi-hour unattended run
     would otherwise end it -- and the whole point of this script is that
-    it does not end early. The level that hit the broken pool is replayed
-    on the fresh one; agents hold a reference to this wrapper's current
-    executor, so they pick the new one up automatically.
+    it does not end early. `run_workload` re-queues whatever was in
+    flight on the dead pool once this has been called.
     """
 
     def __init__(self) -> None:
-        """Start the first pool."""
-        self.executor = ProcessPoolExecutor(initializer=prepare_native_batch_worker)
+        """Start the first pool, sized to `MAX_WORKERS`."""
+        self.executor = ProcessPoolExecutor(
+            max_workers=MAX_WORKERS, initializer=prepare_native_batch_worker
+        )
         self.restarts = 0
 
     def restart(self) -> None:
@@ -289,47 +312,123 @@ class Pool:
             self.executor.shutdown(wait=False, cancel_futures=True)
         except Exception:  # noqa: BLE001 -- a broken pool may fail any way it likes
             pass
-        self.executor = ProcessPoolExecutor(initializer=prepare_native_batch_worker)
+        self.executor = ProcessPoolExecutor(
+            max_workers=MAX_WORKERS, initializer=prepare_native_batch_worker
+        )
 
     def shutdown(self) -> None:
         """Shut the current pool down."""
         self.executor.shutdown(wait=True)
 
 
-def play_level(
-    seed: int, run: RunConfig, pool: Pool
-) -> tuple[dict[str, object], dict[str, object]]:
-    """Play one level with all three agents and shrink it.
+def play_level_task(seed: int, run: RunConfig) -> tuple[dict[str, object], dict[str, object]]:
+    """Compute one whole level -- baseline, greedy, lookahead, shrink --
+    entirely inside the calling process. This is the unit of work
+    submitted to the pool by `run_workload`: one task, one level, no
+    executor of its own.
 
-    Retries once on a broken worker pool, which is a crashed worker rather
-    than a bad level -- the same seed replays deterministically.
+    `GreedyAgent`/`LookaheadAgent` fall back to a sequential candidate
+    sweep when given no executor, which is exactly what running inside an
+    already-parallel worker process needs -- handing them this process's
+    own (nonexistent) pool would either do nothing or deadlock. Simulating
+    all three agents plus the shrink pass here, in one function, means the
+    entire level's compute happens without a single round-trip back to the
+    main process until it is completely done.
     """
-    for attempt in (1, 2):
-        try:
-            level = build_level(seed, run)
-            greedy_agent = GreedyAgent(speed=SHOT_SPEED, executor=pool.executor)
-            lookahead_agent = LookaheadAgent(speed=SHOT_SPEED, executor=pool.executor)
+    level = build_level(seed, run)
+    greedy_agent = GreedyAgent(speed=SHOT_SPEED)
+    lookahead_agent = LookaheadAgent(speed=SHOT_SPEED)
 
-            sample_args = [
-                (level, seed * RANDOM_SAMPLE_COUNT + i, SHOT_SPEED)
-                for i in range(RANDOM_SAMPLE_COUNT)
-            ]
-            samples = list(pool.executor.map(random_playthrough, sample_args, chunksize=1))
-            random_scores = [final_score(records) for records in samples]
-            random_first = samples[0]
+    random_scores: list[int] = []
+    random_first: list[ShotRecord] = []
+    for i in range(RANDOM_SAMPLE_COUNT):
+        sample = RandomAgent(seed=seed * RANDOM_SAMPLE_COUNT + i, speed=SHOT_SPEED)
+        records = record_playthrough(level, sample)
+        random_scores.append(final_score(records))
+        if i == 0:
+            random_first = records
 
-            greedy = record_playthrough(level, greedy_agent)
-            lookahead = record_playthrough(level, lookahead_agent)
+    greedy = record_playthrough(level, greedy_agent)
+    lookahead = record_playthrough(level, lookahead_agent)
 
-            return (
-                level_record(seed, random_scores, random_first, greedy, lookahead),
-                shrink_record(seed, level, greedy_agent, lookahead),
-            )
-        except BrokenExecutor:
-            if attempt == 2:
-                raise
+    return (
+        level_record(seed, random_scores, random_first, greedy, lookahead),
+        shrink_record(seed, level, greedy_agent, lookahead),
+    )
+
+
+def run_workload(
+    items: list[RunConfig],
+    pool: Pool,
+    batch: dict[str, Checkpoint],
+    shrunk: dict[str, Checkpoint],
+    used: dict[str, set[int]],
+    done: dict[str, int],
+    rng: random.Random,
+) -> dict[str, int]:
+    """Play one level per entry in `items` (already one entry per desired
+    level, e.g. a regime repeated `round_size` times), through a rolling
+    window of `MAX_WORKERS` in-flight level tasks.
+
+    Stops submitting new tasks once `should_stop()` is true, but always
+    drains whatever is already in flight rather than cancelling it -- an
+    abort loses at most `MAX_WORKERS` levels' worth of work in progress,
+    not the level a synchronous loop would have been blocked on anyway.
+
+    A dead worker breaks the whole pool at once (`BrokenExecutor` on every
+    future submitted to it, in flight or not); this rebuilds the pool and
+    re-queues every item that was in flight, each with a freshly drawn
+    seed -- the seed it had been given is simply abandoned rather than
+    tracked for exact retry, which would need undoing its `used` entry
+    only to redo it identically a moment later.
+
+    Returns how many levels of each regime were completed.
+    """
+    played: dict[str, int] = {}
+    pending: dict[Future[tuple[dict[str, object], dict[str, object]]], RunConfig] = {}
+    queue = list(items)
+
+    def submit_one() -> bool:
+        if not queue or should_stop():
+            return False
+        run = queue.pop()
+        seed = rng.randrange(1_000_000_000)
+        while seed in used[run.name]:
+            seed = rng.randrange(1_000_000_000)
+        used[run.name].add(seed)
+        pending[pool.executor.submit(play_level_task, seed, run)] = run
+        return True
+
+    for _ in range(MAX_WORKERS):
+        submit_one()
+
+    while pending:
+        completed, _ = wait(pending, return_when="FIRST_COMPLETED")
+        broken = False
+        for future in completed:
+            run = pending.pop(future)
+            try:
+                record, shrink = future.result()
+            except BrokenExecutor:
+                broken = True
+                queue.append(run)
+                continue
+            batch[run.name].append(record)
+            shrunk[run.name].append(shrink)
+            done[run.name] += 1
+            played[run.name] = played.get(run.name, 0) + 1
+
+        if broken:
+            for future, run in pending.items():
+                future.cancel()
+                queue.append(run)
+            pending.clear()
             pool.restart()
-    raise AssertionError("unerreichbar")
+
+        while len(pending) < MAX_WORKERS and submit_one():
+            pass
+
+    return played
 
 
 def main(runs: tuple[RunConfig, ...], resume: bool = False) -> None:
@@ -357,7 +456,7 @@ def main(runs: tuple[RunConfig, ...], resume: bool = False) -> None:
     plan = ", ".join(f"{run.name}x{round_size(run)}" for run in runs)
     if resume:
         log(f"Fortsetzung: {sum(done.values())} Level bereits vorhanden")
-    log(f"Start: {len(runs)} Regime, Runde = {plan}")
+    log(f"Start: {len(runs)} Regime, {MAX_WORKERS} Worker, Runde = {plan}")
     log(f"Stoppen mit Ctrl-C oder: New-Item {STOP_FILE}")
 
     pool = Pool()
@@ -369,25 +468,18 @@ def main(runs: tuple[RunConfig, ...], resume: bool = False) -> None:
         while not should_stop():
             round_index += 1
             round_started = time.perf_counter()
-            for run in runs:
-                if should_stop():
-                    break
-                target = round_size(run)
-                played = 0
-                for _ in range(target):
-                    if should_stop():
-                        break
-                    seed = rng.randrange(1_000_000_000)
-                    while seed in used[run.name]:
-                        seed = rng.randrange(1_000_000_000)
-                    used[run.name].add(seed)
 
-                    record, shrink = play_level(seed, run, pool)
-                    batch[run.name].append(record)
-                    shrunk[run.name].append(shrink)
-                    done[run.name] += 1
-                    played += 1
-                log(f"  Runde {round_index} {run.name}: +{played} (gesamt {done[run.name]})")
+            round_items: list[RunConfig] = []
+            for run in runs:
+                round_items.extend([run] * round_size(run))
+            rng.shuffle(round_items)
+
+            played = run_workload(round_items, pool, batch, shrunk, used, done, rng)
+            for run in runs:
+                log(
+                    f"  Runde {round_index} {run.name}: "
+                    f"+{played.get(run.name, 0)} (gesamt {done[run.name]})"
+                )
 
             elapsed = time.perf_counter() - round_started
             total = sum(done.values())
