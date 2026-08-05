@@ -22,14 +22,26 @@ Schwierigkeitsregime, macht die Ergebnisse also unvergleichbar mit denen
 davor, weshalb jede Kombination ihr eigenes Dateipaar bekommt statt den
 letzten Lauf zu überschreiben.
 
-| `name` | Kugeln | Schüsse |
-|---|---|---|
-| `8b` | 8 | 2 |
-| `5b` | 5 | 2 |
-| `6b_3s` | 6 | 3 |
-| `10b_2s` | 10 | 2 |
-| `5b_3s`, `8b_3s`, `10b_3s` | 5 / 8 / 10 | 3 |
-| `5b_4s`, `8b_4s`, `10b_4s` | 5 / 8 / 10 | 4 |
+| `name` | Kugeln | Schüsse | Level (Stand 2026-08-06) |
+|---|---|---|---|
+| `8b` | 8 | 2 | 4050 |
+| `5b` | 5 | 2 | 4050 |
+| `6b_3s` | 6 | 3 | 1000 |
+| `10b_2s` | 10 | 2 | 3949 |
+| `5b_3s` | 5 | 3 | 2610 |
+| `8b_3s` | 8 | 3 | 2610 |
+| `10b_3s` | 10 | 3 | 2522 |
+| `5b_4s` | 5 | 4 | 2100 |
+| `8b_4s` | 8 | 4 | 2100 |
+| `10b_4s` | 10 | 4 | 2100 |
+
+Die Level-Zahlen von `8b`/`5b`/`10b_2s`/`5b_3s`/`8b_3s`/`10b_3s`/`5b_4s`/
+`8b_4s`/`10b_4s` stammen aus einem `scripts/long_run.py`-Lauf
+(2026-08-05, ~7.6h, siehe `docs/ki_log.md`) und sind größer als die
+1000-Level-Stichproben von `agent_batch_timing.py` üblich sind -- ein
+späterer erneuter `long_run.py`-Lauf verändert diese Zahlen. Die
+`data/*.json`-Dateien selbst liegen nicht im Repo (zu groß, ~200 MB);
+nur der Code, mit dem sie erzeugt wurden, ist versioniert.
 
 `name` ist der Dateiname-Stamm und lautet standardmäßig `<n>b_<s>s`. Die
 ersten beiden Läufe stammen aus der Zeit, als die Schusszahl noch fix 2

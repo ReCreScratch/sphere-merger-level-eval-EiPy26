@@ -7,10 +7,13 @@ a single metric.
 The picks are derived from the run's own metrics instead of being a
 hand-maintained seed list: a hardcoded list goes stale the moment a run
 is repeated (seeds are drawn fresh each time) and silently shows levels
-from a dataset that no longer exists. Each category contributes its
-single clearest example, and the reason strings carry the numbers that
-made it qualify, so the sidebar is readable without cross-referencing the
-data.
+from a dataset that no longer exists. Each category contributes its top
+`TOP_PER_CATEGORY` levels, not just its single best -- one example only
+shows the category's most extreme case, which is a poor guide to whether
+the category is a real pattern or a fluke; a short ranking shows whether
+the next few still look like the first. The reason strings carry the
+numbers that made each one qualify plus its rank, so the sidebar is
+readable without cross-referencing the data.
 
 Command-line argument selects the run (`... browse_interesting_levels.py
 8b`); default is the newest entry in `RUNS`.
@@ -39,29 +42,48 @@ def _shot_tuples(raw: list[list[float]]) -> list[tuple[float, float]]:
     return [(angle, speed) for angle, speed in raw]
 
 
-def _pick(
-    metrics: list[LevelMetrics],
-    key: Callable[[LevelMetrics], float],
-    reason: Callable[[LevelMetrics], str],
-    candidates: list[LevelMetrics] | None = None,
-) -> tuple[int, str] | None:
-    """The single best level by `key` (highest wins), with its reason.
+TOP_PER_CATEGORY = 6
+"""How many levels each category contributes to the sidebar.
 
-    `None` when nothing qualifies -- a category that no level in this run
-    matches is skipped rather than filled with a weak example.
+One per category answers "what does this kind of level look like" with a
+single example, which is enough to be misled by: the top level of a
+category is by construction its most extreme, and an extreme is a bad
+guide to whether the category describes a real pattern. A short ranking
+shows whether the second and sixth still look like the first.
+"""
+
+
+SortKey = float | tuple[float, float]
+
+
+def _top(
+    metrics: list[LevelMetrics],
+    key: Callable[[LevelMetrics], SortKey],
+    reason: Callable[[LevelMetrics, int], str],
+    candidates: list[LevelMetrics] | None = None,
+    count: int = TOP_PER_CATEGORY,
+) -> list[tuple[int, str]]:
+    """The best `count` levels by `key` (highest wins), each with its reason.
+
+    Empty when nothing qualifies -- a category no level in this run matches
+    is skipped rather than filled with weak examples. `reason` gets the
+    level's rank within the category so the sidebar shows where in the
+    ranking a row sits.
     """
     pool = metrics if candidates is None else candidates
-    if not pool:
-        return None
-    best = max(pool, key=key)
-    return best.seed, reason(best)
+    ranked = sorted(pool, key=key, reverse=True)[:count]
+    return [(m.seed, reason(m, rank)) for rank, m in enumerate(ranked, start=1)]
 
 
-def curate(metrics: list[LevelMetrics], shrunk: dict[int, dict[str, Any]]) -> list[tuple[int, str]]:
-    """One example per category, in display order, deduplicated.
+def curate(
+    metrics: list[LevelMetrics],
+    shrunk: dict[int, dict[str, Any]],
+    shot_count: int,
+) -> list[tuple[int, str]]:
+    """The top `TOP_PER_CATEGORY` levels of every category, deduplicated.
 
-    A level that wins two categories is listed once, under whichever came
-    first -- showing the same seed twice would waste a sidebar row that
+    A level that ranks in two categories is listed once, under whichever
+    came first -- showing the same seed twice would waste a sidebar row
     another kind of level could have had.
     """
     tags = tag_batch(metrics)
@@ -69,88 +91,93 @@ def curate(metrics: list[LevelMetrics], shrunk: dict[int, dict[str, Any]]) -> li
     removed = {seed: entry["spheres_removed"] for seed, entry in shrunk.items()}
     increase = {seed: entry["gap_increase"] for seed, entry in shrunk.items()}
 
-    picks = [
-        _pick(
+    groups = [
+        _top(
             metrics,
             key=lambda m: m.depth_gap,
-            reason=lambda m: (
-                f"Hoechster Gap ({m.depth_gap}): Greedy {m.greedy_score}, "
+            reason=lambda m, rank: (
+                f"Hoechster Gap #{rank} ({m.depth_gap}): Greedy {m.greedy_score}, "
                 f"Lookahead {m.lookahead_score}"
             ),
         ),
-        _pick(
+        _top(
             metrics,
             key=lambda m: -m.depth_gap,
             candidates=[m for m in metrics if m.depth_gap < 0],
-            reason=lambda m: (
-                f"Lookahead VERLIERT ({m.depth_gap}): bei 3 Schuessen reicht "
-                f"sein 2-Ply-Blick nicht bis zum Rundenende"
+            reason=lambda m, rank: (
+                f"Lookahead VERLIERT #{rank} ({m.depth_gap}): bei {shot_count} Schuessen "
+                f"reicht sein 2-Ply-Blick nicht bis zum Rundenende"
             ),
         ),
-        _pick(
+        _top(
             tagged[Archetype.SPECTACLE],
             key=lambda m: (m.max_combo, m.lookahead_score),
             candidates=tagged[Archetype.SPECTACLE],
-            reason=lambda m: (
-                f"Laengste Combo-Kette ({m.max_combo} Merges in einem Schuss), "
+            reason=lambda m, rank: (
+                f"Laengste Combo-Kette #{rank} ({m.max_combo} Merges in einem Schuss), "
                 f"Endscore {m.lookahead_score}"
             ),
         ),
-        _pick(
+        _top(
             metrics,
             key=lambda m: (m.payoff_conc or 0.0, m.depth_gap),
             candidates=[m for m in tagged[Archetype.AHA] if m.payoff_conc is not None],
-            reason=lambda m: (
-                f"Reine Falle: {(m.payoff_conc or 0.0):.0%} des Scores faellt erst "
+            reason=lambda m, rank: (
+                f"Reine Falle #{rank}: {(m.payoff_conc or 0.0):.0%} des Scores faellt erst "
                 f"im letzten Schuss, Gap {m.depth_gap}"
             ),
         ),
-        _pick(
+        _top(
             metrics,
             key=lambda m: m.skill_gain or 0.0,
             candidates=[m for m in tagged[Archetype.FAIR_HARD] if m.skill_gain is not None],
-            reason=lambda m: (
-                f"Fair-schwer: {(m.skill_gain or 0.0):.1f} Sigma ueber dem Zufall "
+            reason=lambda m, rank: (
+                f"Fair-schwer #{rank}: {(m.skill_gain or 0.0):.1f} Sigma ueber dem Zufall "
                 f"({m.random_mean:.0f}), aber enge Streuung"
             ),
         ),
-        _pick(
+        _top(
             metrics,
             key=lambda m: m.luck_share,
             candidates=tagged[Archetype.LUCK],
-            reason=lambda m: (
-                f"Gluecksspiel: {m.luck_share:.0%} der Zufallsversuche erreichen "
+            reason=lambda m, rank: (
+                f"Gluecksspiel #{rank}: {m.luck_share:.0%} der Zufallsversuche erreichen "
                 f"Lookaheads {m.lookahead_score} auch so"
             ),
         ),
-        _pick(
+        _top(
             metrics,
             key=lambda m: removed.get(m.seed, 0),
-            reason=lambda m: (
-                f"Aggressivstes Shrinking: {removed[m.seed]} Kugeln entfernt, Gap {m.depth_gap}"
+            reason=lambda m, rank: (
+                f"Aggressivstes Shrinking #{rank}: {removed[m.seed]} Kugeln entfernt, "
+                f"Gap {m.depth_gap}"
             ),
         ),
-        _pick(
+        _top(
             metrics,
             key=lambda m: increase.get(m.seed, 0),
-            reason=lambda m: f"Groesste Gap-Zunahme durch Shrink (+{increase[m.seed]})",
+            reason=lambda m, rank: (
+                f"Groesste Gap-Zunahme durch Shrink #{rank} (+{increase[m.seed]})"
+            ),
         ),
-        _pick(
+        _top(
             metrics,
             key=lambda m: -abs(increase.get(m.seed, 0)) - abs(removed.get(m.seed, 0) - 2),
             candidates=[m for m in metrics if m.seed in removed and removed[m.seed] > 0],
-            reason=lambda m: (
-                f"Typischer Fall: {removed[m.seed]} Kugeln weg, Gap {m.depth_gap} unveraendert"
+            reason=lambda m, rank: (
+                f"Typischer Fall #{rank}: {removed[m.seed]} Kugeln weg, "
+                f"Gap {m.depth_gap} unveraendert"
             ),
         ),
     ]
 
     ordered: list[tuple[int, str]] = []
     seen: set[int] = set()
-    for pick in picks:
-        if pick is not None and pick[0] not in seen:
-            seen.add(pick[0])
-            ordered.append(pick)
+    for group in groups:
+        for seed, reason in group:
+            if seed not in seen:
+                seen.add(seed)
+                ordered.append((seed, reason))
     return ordered
 
 
@@ -201,7 +228,7 @@ def entries_for(run: RunConfig) -> list[CompareEntry]:
     shrunk_by_seed = {entry["seed"]: entry for entry in shrunk_run["levels"]}
 
     metrics = [LevelMetrics.from_record(record) for record in source["levels"]]
-    picks = curate(metrics, shrunk_by_seed)
+    picks = curate(metrics, shrunk_by_seed, shot_count=run.shot_count)
     return [
         _build_entry(shrunk_by_seed[seed], shrunk_run["meta"], reason)
         for seed, reason in picks

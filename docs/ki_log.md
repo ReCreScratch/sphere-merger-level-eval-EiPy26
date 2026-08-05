@@ -276,3 +276,54 @@ abgewichen.
   Schuss 2 nicht, weil er in der kurzen Runde der letzte ist und auf
   Sofortgewinn zurückfällt. Aus dem gespeicherten Zustand ist er aber für
   ~1 % der Kosten nachrechenbar. In `docs/data_schema.md` festgehalten.
+- `agents/base.py`: `EXECUTOR_CHUNKSIZE = 4` für beide Agenten-Sweeps,
+  Random-Samples in `long_run.py` parallelisiert statt sequenziell im
+  Hauptprozess. Anlass: der laufende long_run nutzte nur 44 % der 16
+  Threads. Gemessen statt vermutet -- `executor.map` ohne chunksize
+  verschickte bei Greedy jeden Kandidaten einzeln; der Pickle-Overhead pro
+  Simulation machte den parallelen Sweep *langsamer* als denselben Sweep
+  sequenziell im Aufrufer (0.089s vs. 0.062s), mit chunksize=4 dann
+  0.018s. Die 20 Random-Samples liefen komplett sequenziell (0.418s),
+  parallel 0.087s. Zusammen 1.10 -> 0.70 s/Level im laufenden Betrieb.
+  Dazu ein `--resume`-Modus für `long_run.py`/`checkpoint.py`, damit der
+  Wechsel mitten im Lauf die schon gerechneten Level nicht verwirft.
+- **Langer Lauf abgeschlossen** (`long_run.py`, 2026-08-05 16:23 bis
+  2026-08-06 00:07, einmal für den Optimierungswechsel unterbrochen und
+  per `--resume` fortgesetzt): 26091 Level über neun Regime (5/8/10
+  Kugeln × 2/3/4 Schüsse), plus die vorher separat gelaufenen 1000 Level
+  von `6b_3s`. Ergebnisse nur lokal in `data/*.json` (~200 MB,
+  nicht gepusht), Checkpoints in `data/checkpoints/` (gitignored).
+
+  | Regime | Kugeln | Schüsse | Level |
+  |---|---|---|---|
+  | `5b` | 5 | 2 | 4050 |
+  | `8b` | 8 | 2 | 4050 |
+  | `10b_2s` | 10 | 2 | 3949 |
+  | `5b_3s` | 5 | 3 | 2610 |
+  | `8b_3s` | 8 | 3 | 2610 |
+  | `10b_3s` | 10 | 3 | 2522 |
+  | `6b_3s` | 6 | 3 | 1000 |
+  | `5b_4s` | 5 | 4 | 2100 |
+  | `8b_4s` | 8 | 4 | 2100 |
+  | `10b_4s` | 10 | 4 | 2100 |
+
+  Negative Gaps (Lookahead schlägt Greedy nicht) traten in keinem der
+  12000+ 2-Schuss-Level auf, aber in 9-10 % der 3- und 4-Schuss-Level --
+  bestätigt an großer Stichprobe, dass Lookaheads 2-Ply-Suche ab
+  `shot_count > 2` nicht mehr bis zum Rundenende reicht und `depth_gap`
+  dort keine Optimalitätsaussage mehr ist. Der `aha`-Einbruch bei mehr
+  Schüssen (846 bei `5b` -> 71 bei `5b_4s`, trotz *steigendem*
+  Gap-Median) bestätigt sich als überwiegend Artefakt der absoluten
+  `PAYOFF_CONC_MIN`-Schwelle -- Normierung auf `1/shot_count` steht noch
+  aus.
+- `scripts/browse_interesting_levels.py`: Sidebar zeigt je Kategorie die
+  Top `TOP_PER_CATEGORY` (=6) Level statt nur des einen extremsten --
+  Nutzerwunsch ("eine Liste mit interessanten für alle Kategorien"), da
+  ein Einzelbeispiel nur den Extremfall zeigt, nicht ob die Kategorie ein
+  echtes Muster ist. Dabei auch einen Text-Bug behoben: die
+  "Lookahead verliert"-Begründung nannte hartkodiert "3 Schüsse" statt
+  der tatsächlichen `shot_count` des Laufs.
+- `scripts/compare_top_gaps.py` (neu): Top-5-nach-Gap über *alle* Regime
+  in einer gemeinsamen Sidebar (mit `[regime]`-Präfix), statt mehrerer
+  Kategorien für ein Regime wie `browse_interesting_levels.py` -- für
+  den Vergleich, wie der Gap mit Kugel-/Schusszahl skaliert.
