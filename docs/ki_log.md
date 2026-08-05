@@ -214,3 +214,20 @@ abgewichen.
   nach Auffälligkeit (höchster Gap, größte Gap-Zunahme/-Abnahme,
   aggressivstes Shrinking, Combo-Rekord), nicht nach einer einzelnen
   Metrik sortiert.
+
+## 2026-08-03
+- `scripts/agent_batch_timing.py` / `scripts/shrink_top_levels.py` auf
+  mehrere Kugelanzahlen parametrisiert (`SPHERE_COUNTS = (8, 5)`, statt
+  bisher fest 10), je eigene Output-Datei
+  (`data/interesting_levels_<n>b.json`, `data/shrunk_levels_<n>b.json`) --
+  ein `save_run` ersetzt sein Ziel komplett, verschiedene Kugelanzahlen
+  sind verschiedene Schwierigkeitsregime, keine Zeilen derselben Tabelle.
+  Level-Seeds werden jetzt zufällig gezogen (`random.sample`) statt
+  `range(LEVEL_COUNT)`, pro Level weiterhin einzeln gespeichert (bereits
+  ausreichend für späteren Abgleich, da `generate_random_level`
+  deterministisch ist). Finale interaktive Grid-Ansicht per
+  `SPHERE_MERGER_NO_GRID=1` überspringbar gemacht, für unbeaufsichtigte
+  Batch-Läufe -- Daten sind zu dem Zeitpunkt schon gespeichert, die
+  Grid-Ansicht ist reine Sichtprüfung. Vor dem vollen 1000er-Lauf je
+  Kugelanzahl ein 5-Level-Proberun gemacht (Nutzerwunsch), erst danach den
+  vollen Lauf gestartet.

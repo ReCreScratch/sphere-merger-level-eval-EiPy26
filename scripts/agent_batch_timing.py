@@ -4,23 +4,42 @@ larger batch (the eventual goal: ~1000 levels) is practical. Random is the
 difficulty baseline this project's core question needs (README: how hard
 is a level, judged by how far above chance an informed agent gets) --
 greedy/lookahead alone only measure the gap between two informed
-strategies, not distance from chance. Saves minimal info (seed + scores,
-not shots) for every level played -- enough to revisit any of them later,
-not just the standouts -- to the interesting-levels store. Afterwards,
+strategies, not distance from chance. Saves seed + scores + greedy/lookahead
+shots for every level played -- enough to revisit any of them later, not
+just the standouts, without re-simulating (shots are cheap to store: at
+most shot_count tuples each) -- to the interesting-levels store. Shots are
+what `scripts/shrink_top_levels.py` reuses to skip re-running lookahead's
+expensive 2-ply search on levels it already has an answer for. Afterwards,
 replays the top TOP_N by greedy/lookahead score gap side by side.
+
+Runs once per entry in SPHERE_COUNTS, each to its own output file (data/
+interesting_levels_<n>b.json) -- different initial sphere counts are
+different difficulty regimes, not rows of the same dataset, and a new
+`save_run` replaces its target file wholesale rather than merging in.
+
+Level seeds are drawn fresh (random, not range(LEVEL_COUNT)) each run so
+repeated invocations sample different levels; each level's seed is still
+saved per-record (as before), which is all a later re-run/comparison needs
+-- `generate_random_level` is deterministic given seed + meta.
 
 Progress bar (pygame, same pattern as demo_find_divergence_live.py) is
 drawn once per level, not per simulation step -- negligible next to the
 seconds-per-level agent search itself.
+
+Set env var SPHERE_MERGER_NO_GRID=1 to skip the final interactive grid
+replay (e.g. for unattended/headless batch runs) -- the data is already
+saved by then, the grid is only for visual inspection.
 """
 
 from __future__ import annotations
 
+import os
+import random
 import time
-from collections.abc import Callable
 from concurrent.futures import ProcessPoolExecutor
 from contextlib import nullcontext
 from datetime import date
+from pathlib import Path
 from typing import Literal
 
 import pygame
@@ -35,7 +54,6 @@ from sphere_merger.agents.runner import (
 )
 from sphere_merger.game.interesting_levels import save_run
 from sphere_merger.game.level import LevelDefinition, generate_random_level
-from sphere_merger.game.shrink import shrink_level
 from sphere_merger.physics.boundary import Boundary
 from sphere_merger.physics.engine import native_backend
 from sphere_merger.physics.vector import Vector2
@@ -44,8 +62,7 @@ from sphere_merger.rendering.renderer import RenderConfig
 
 BACKEND: Literal["python", "rust"] = "rust"
 TOP_N = 9
-SHRINK_TOP_N = False
-SOURCE_SCRIPT = f"agent_batch_timing.py[{BACKEND}]"
+SHOW_GRID = os.environ.get("SPHERE_MERGER_NO_GRID") != "1"
 
 FIELD = Boundary(x_min=-6.0, x_max=6.0, y_min=-6.0, y_max=6.0)
 SPAWN_MARGIN = 1.0
@@ -53,7 +70,8 @@ SPAWN = Vector2(FIELD.x_min + SPAWN_MARGIN, FIELD.y_min + SPAWN_MARGIN)
 SHOT_SPEED = 25.0
 RANDOM_SEED = 0
 LEVEL_COUNT = 1000
-INITIAL_SPHERE_COUNT = 10
+SPHERE_COUNTS = (8, 5)
+DATA_DIR = Path(__file__).resolve().parents[1] / "data"
 
 WINDOW_SIZE = (900, 300)
 BAR_COLOR = (90, 160, 220)
@@ -61,20 +79,29 @@ BAR_BG_COLOR = (60, 60, 80)
 TEXT_COLOR = (220, 220, 220)
 
 
-def _build_level(seed: int) -> LevelDefinition:
+def _output_path(sphere_count: int) -> Path:
+    return DATA_DIR / f"interesting_levels_{sphere_count}b.json"
+
+
+def _build_level(seed: int, sphere_count: int) -> LevelDefinition:
     return generate_random_level(
         seed=seed,
         boundary=FIELD,
         spawn_position=SPAWN,
         target_score=999,
-        initial_sphere_count=INITIAL_SPHERE_COUNT,
+        initial_sphere_count=sphere_count,
         shot_count=2,
         level_range=(0, 2),
     )
 
 
 def _draw_progress(
-    screen: pygame.Surface, font: pygame.font.Font, done: int, total: int, last_elapsed: float
+    screen: pygame.Surface,
+    font: pygame.font.Font,
+    done: int,
+    total: int,
+    last_elapsed: float,
+    sphere_count: int,
 ) -> None:
     bar_rect = pygame.Rect(0, 0, int(WINDOW_SIZE[0] * 0.7), 24)
     bar_rect.center = (WINDOW_SIZE[0] // 2, WINDOW_SIZE[1] // 2)
@@ -86,17 +113,26 @@ def _draw_progress(
     pygame.draw.rect(screen, BAR_COLOR, fill_rect, border_radius=4)
 
     label = font.render(
-        f"Level {done}/{total} -- letzter Level: {last_elapsed:.2f}s", True, TEXT_COLOR
+        f"[{sphere_count} Kugeln] Level {done}/{total} -- letzter Level: {last_elapsed:.2f}s",
+        True,
+        TEXT_COLOR,
     )
     screen.blit(label, label.get_rect(center=(bar_rect.centerx, bar_rect.top - 24)))
     pygame.display.flip()
 
 
-if __name__ == "__main__":
-    pygame.init()
-    screen = pygame.display.set_mode(WINDOW_SIZE)
-    pygame.display.set_caption("Sphere Merger -- Batch-Timing")
-    font = pygame.font.Font(None, 22)
+def run_batch(
+    sphere_count: int,
+    screen: pygame.Surface,
+    font: pygame.font.Font,
+    random_agent: RandomAgent,
+    greedy: GreedyAgent,
+    lookahead: LookaheadAgent,
+) -> None:
+    """Play LEVEL_COUNT random levels with `sphere_count` initial spheres
+    each, saving the results to their own `interesting_levels_<n>b.json`.
+    """
+    seeds = random.sample(range(1_000_000_000), LEVEL_COUNT)
 
     Shots = list[tuple[float, float]]
     PerLevel = tuple[int, float, int, Shots, int, float, int, Shots, int, float, int, Shots, int]
@@ -106,96 +142,58 @@ if __name__ == "__main__":
     # lookahead_combo -- combo is the longest single-shot merge chain (see
     # agents.runner.record_playthrough).
     last_elapsed = 0.0
-    _draw_progress(screen, font, 0, LEVEL_COUNT, last_elapsed)
+    _draw_progress(screen, font, 0, LEVEL_COUNT, last_elapsed, sphere_count)
 
-    worker_init = prepare_native_batch_worker if BACKEND == "rust" else disable_contracts_in_worker
-    main_process_backend = native_backend() if BACKEND == "rust" else nullcontext()
+    total_start = time.perf_counter()
+    for done, seed in enumerate(seeds):
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT or (
+                event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE
+            ):
+                pygame.quit()
+                raise SystemExit
 
-    with ProcessPoolExecutor(initializer=worker_init) as executor, main_process_backend:
-        random_agent = RandomAgent(seed=RANDOM_SEED, speed=SHOT_SPEED)
-        greedy = GreedyAgent(speed=SHOT_SPEED, executor=executor)
-        lookahead = LookaheadAgent(speed=SHOT_SPEED, executor=executor)
+        level = _build_level(seed, sphere_count)
 
-        total_start = time.perf_counter()
-        for seed in range(LEVEL_COUNT):
-            for event in pygame.event.get():
-                if event.type == pygame.QUIT or (
-                    event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE
-                ):
-                    pygame.quit()
-                    raise SystemExit
+        start = time.perf_counter()
+        random_shots, random_score, random_combo = record_playthrough(level, random_agent)
+        t_random = time.perf_counter() - start
 
-            level = _build_level(seed)
+        start = time.perf_counter()
+        greedy_shots, greedy_score, greedy_combo = record_playthrough(level, greedy)
+        t_greedy = time.perf_counter() - start
 
-            start = time.perf_counter()
-            random_shots, random_score, random_combo = record_playthrough(level, random_agent)
-            t_random = time.perf_counter() - start
+        start = time.perf_counter()
+        lookahead_shots, lookahead_score, lookahead_combo = record_playthrough(level, lookahead)
+        t_lookahead = time.perf_counter() - start
 
-            start = time.perf_counter()
-            greedy_shots, greedy_score, greedy_combo = record_playthrough(level, greedy)
-            t_greedy = time.perf_counter() - start
-
-            start = time.perf_counter()
-            lookahead_shots, lookahead_score, lookahead_combo = record_playthrough(level, lookahead)
-            t_lookahead = time.perf_counter() - start
-
-            last_elapsed = t_random + t_greedy + t_lookahead
-            per_level.append(
-                (
-                    seed,
-                    t_random,
-                    random_score,
-                    random_shots,
-                    random_combo,
-                    t_greedy,
-                    greedy_score,
-                    greedy_shots,
-                    greedy_combo,
-                    t_lookahead,
-                    lookahead_score,
-                    lookahead_shots,
-                    lookahead_combo,
-                )
+        last_elapsed = t_random + t_greedy + t_lookahead
+        per_level.append(
+            (
+                seed,
+                t_random,
+                random_score,
+                random_shots,
+                random_combo,
+                t_greedy,
+                greedy_score,
+                greedy_shots,
+                greedy_combo,
+                t_lookahead,
+                lookahead_score,
+                lookahead_shots,
+                lookahead_combo,
             )
-            _draw_progress(screen, font, seed + 1, LEVEL_COUNT, last_elapsed)
+        )
+        _draw_progress(screen, font, done + 1, LEVEL_COUNT, last_elapsed, sphere_count)
 
-        total_elapsed = time.perf_counter() - total_start
+    total_elapsed = time.perf_counter() - total_start
 
-        top = sorted(per_level, key=lambda entry: abs(entry[6] - entry[10]), reverse=True)[:TOP_N]
+    top = sorted(per_level, key=lambda entry: abs(entry[6] - entry[10]), reverse=True)[:TOP_N]
 
-        ShrunkResult = tuple[LevelDefinition, Shots, int, Shots, int]
-        shrunk_by_seed: dict[int, ShrunkResult] = {}
-        if SHRINK_TOP_N:
-
-            def _gap(level: LevelDefinition) -> int:
-                _gs, greedy_score, _gc = record_playthrough(level, greedy)
-                _ls, lookahead_score, _lc = record_playthrough(level, lookahead)
-                return abs(greedy_score - lookahead_score)
-
-            def _at_least_as_divergent(baseline_gap: int) -> Callable[[LevelDefinition], bool]:
-                return lambda lvl: _gap(lvl) >= baseline_gap
-
-            for entry in top:
-                seed = entry[0]
-                baseline_gap = abs(entry[6] - entry[10])
-                original = _build_level(seed)
-                shrunk = shrink_level(original, is_interesting=_at_least_as_divergent(baseline_gap))
-                shrunk_greedy_shots, shrunk_greedy_score, _sgc = record_playthrough(shrunk, greedy)
-                shrunk_lookahead_shots, shrunk_lookahead_score, _slc = record_playthrough(
-                    shrunk, lookahead
-                )
-                shrunk_by_seed[seed] = (
-                    shrunk,
-                    shrunk_greedy_shots,
-                    shrunk_greedy_score,
-                    shrunk_lookahead_shots,
-                    shrunk_lookahead_score,
-                )
-
-    pygame.quit()
-
+    print(f"\n=== {sphere_count} Kugeln ===")
     print(
-        f"{'seed':>4}  {'random':>6}  {'t_greedy':>9}  {'greedy':>6}  "
+        f"{'seed':>10}  {'random':>6}  {'t_greedy':>9}  {'greedy':>6}  "
         f"{'t_lookahead':>11}  {'lookahead':>9}  {'combo':>5}"
     )
     for (
@@ -214,7 +212,7 @@ if __name__ == "__main__":
         lookahead_combo,
     ) in per_level:
         print(
-            f"{seed:>4}  {random_score:>6}  {t_greedy:>8.2f}s  {greedy_score:>6}  "
+            f"{seed:>10}  {random_score:>6}  {t_greedy:>8.2f}s  {greedy_score:>6}  "
             f"{t_lookahead:>10.2f}s  {lookahead_score:>9}  {lookahead_combo:>5}"
         )
 
@@ -239,7 +237,7 @@ if __name__ == "__main__":
 
     save_run(
         meta={
-            "source_script": SOURCE_SCRIPT,
+            "source_script": f"agent_batch_timing.py[{BACKEND}]",
             "field": {
                 "x_min": FIELD.x_min,
                 "x_max": FIELD.x_max,
@@ -248,26 +246,30 @@ if __name__ == "__main__":
             },
             "spawn_margin": SPAWN_MARGIN,
             "target_score": 999,
-            "initial_sphere_count": INITIAL_SPHERE_COUNT,
+            "initial_sphere_count": sphere_count,
             "shot_count": 2,
             "level_range": [0, 2],
             "shot_speed": SHOT_SPEED,
             "found_at": date.today().isoformat(),
+            "seeds": seeds,
         },
         levels=[
             {
                 "seed": entry[0],
                 "random_score": entry[2],
                 "greedy_score": entry[6],
+                "greedy_shots": entry[7],
                 "lookahead_score": entry[10],
+                "lookahead_shots": entry[11],
                 "gap": abs(entry[6] - entry[10]),
                 "lookahead_max_combo": entry[12],
             }
             for entry in per_level
         ],
+        path=_output_path(sphere_count),
     )
 
-    print(f"\nTop {TOP_N} nach Score-Differenz (greedy/lookahead):")
+    print(f"\nTop {TOP_N} nach Score-Differenz (greedy/lookahead), {sphere_count} Kugeln:")
 
     cells: dict[str, tuple[LevelDefinition, list[tuple[float, float]]]] = {}
     for (
@@ -286,38 +288,36 @@ if __name__ == "__main__":
         lookahead_combo,
     ) in top:
         gap = abs(greedy_score - lookahead_score)
-        shrunk_info = shrunk_by_seed.get(seed)
-        shrunk_note = ""
-        if shrunk_info is not None:
-            (
-                shrunk_level,
-                shrunk_greedy_shots,
-                shrunk_greedy_score,
-                shrunk_lookahead_shots,
-                shrunk_lookahead_score,
-            ) = shrunk_info
-            shrunk_gap = abs(shrunk_greedy_score - shrunk_lookahead_score)
-            shrunk_note = (
-                f" -- shrunk {len(shrunk_level.initial_spheres)} spheres/"
-                f"{len(shrunk_level.shot_queue)} shots (gap {shrunk_gap})"
-            )
         print(
             f"  seed {seed}: random={random_score} greedy={greedy_score} "
-            f"lookahead={lookahead_score} (gap {gap}, combo {lookahead_combo}){shrunk_note}"
+            f"lookahead={lookahead_score} (gap {gap}, combo {lookahead_combo})"
         )
 
-        level = _build_level(seed)
-        cells[f"seed {seed} / random ({random_score})"] = (level, random_shots)
-        cells[f"seed {seed} / greedy ({greedy_score})"] = (level, greedy_shots)
-        cells[f"seed {seed} / lookahead ({lookahead_score})"] = (level, lookahead_shots)
-        if shrunk_info is not None:
-            cells[f"seed {seed} / shrunk greedy ({shrunk_greedy_score})"] = (
-                shrunk_level,
-                shrunk_greedy_shots,
-            )
-            cells[f"seed {seed} / shrunk lookahead ({shrunk_lookahead_score})"] = (
-                shrunk_level,
-                shrunk_lookahead_shots,
-            )
+        if SHOW_GRID:
+            level = _build_level(seed, sphere_count)
+            cells[f"seed {seed} / random ({random_score})"] = (level, random_shots)
+            cells[f"seed {seed} / greedy ({greedy_score})"] = (level, greedy_shots)
+            cells[f"seed {seed} / lookahead ({lookahead_score})"] = (level, lookahead_shots)
 
-    run_agent_grid(cells, columns=9, render_config=RenderConfig(window_size=(1800, 1000)))
+    if SHOW_GRID:
+        run_agent_grid(cells, columns=9, render_config=RenderConfig(window_size=(1800, 1000)))
+
+
+if __name__ == "__main__":
+    pygame.init()
+    screen = pygame.display.set_mode(WINDOW_SIZE)
+    pygame.display.set_caption("Sphere Merger -- Batch-Timing")
+    font = pygame.font.Font(None, 22)
+
+    worker_init = prepare_native_batch_worker if BACKEND == "rust" else disable_contracts_in_worker
+    main_process_backend = native_backend() if BACKEND == "rust" else nullcontext()
+
+    with ProcessPoolExecutor(initializer=worker_init) as executor, main_process_backend:
+        random_agent = RandomAgent(seed=RANDOM_SEED, speed=SHOT_SPEED)
+        greedy = GreedyAgent(speed=SHOT_SPEED, executor=executor)
+        lookahead = LookaheadAgent(speed=SHOT_SPEED, executor=executor)
+
+        for sphere_count in SPHERE_COUNTS:
+            run_batch(sphere_count, screen, font, random_agent, greedy, lookahead)
+
+    pygame.quit()
