@@ -327,3 +327,41 @@ abgewichen.
   in einer gemeinsamen Sidebar (mit `[regime]`-Präfix), statt mehrerer
   Kategorien für ein Regime wie `browse_interesting_levels.py` -- für
   den Vergleich, wie der Gap mit Kugel-/Schusszahl skaliert.
+
+## 2026-08-06
+- `scripts/long_run.py`: Architektur umgestellt, ein Worker-Task = ein
+  komplettes Level statt ein Kandidat-Winkel. Anlass: die alte
+  per-Schuss-Architektur (Kandidaten-Sweep ueber den Pool verteilt,
+  Barriere nach jedem Schuss/jeder Agenten-Phase) mass nur 44-53%
+  CPU-Auslastung -- ein 4-Schuss-Level durchlaeuft ueber ein Dutzend
+  solcher Barrieren, jede laesst den gesamten Pool stillstehen.
+  `play_level_task` rechnet jetzt ein Level komplett sequenziell in
+  einem Worker (`GreedyAgent`/`LookaheadAgent` faellt ohne Executor
+  ohnehin auf sequenzielle Sweeps zurueck), Parallelitaet kommt aus
+  vielen gleichzeitig laufenden *verschiedenen* Level statt aus dem
+  Verteilen eines einzelnen. `run_workload`: rollierendes Fenster von
+  `MAX_WORKERS` gleichzeitigen Level-Tasks.
+
+  Eine erste Einschaetzung (auf Nutzerfrage zur Auslastung hin) hatte
+  behauptet, das lohne sich nur bei kurzen Runden und sei bei 4 Schuessen
+  ungefaehr ein Nullsummenspiel -- verifiziert durch eine Hochrechnung
+  statt einer echten Messung, deshalb daraufhin erstmal auf die alte
+  Architektur zurueckgesetzt. Der Nutzer hat zurecht nachgehakt ("40+
+  compute bringt nicht aehnliche Beschleunigung, das kommt mir komisch
+  vor"), woraufhin eine echte Messung (statt Hochrechnung) der alten
+  Architektur auf `8b_4s` zeigte: 0.57 Level/s, nicht die geschaetzten
+  ~0.77 -- die Hochrechnung hatte unterschaetzt, wie viele
+  Synchronisationsbarrieren mit der Schusszahl mitwachsen. Echter
+  Vergleich beider Architekturen auf denselben Regimen: `8b` (2 Schuss)
+  1.43 -> 2.04 Level/s (+43%), `8b_4s` (4 Schuss) 0.57 -> 0.73 Level/s
+  (+29%) -- Gewinn auf beiden Seiten bestaetigt, die neue Architektur
+  danach erneut eingebaut. Lehre: Kapazitaetsaussagen auf hochgerechneten
+  statt gemessenen Zahlen sind bei diesem Codebestand mehrfach schiefgegangen
+  (siehe auch den Analyse-Draft zu `payoff_conc`) -- lieber kurz nachmessen.
+- Beim Verifizieren versehentlich die echten `5b_3s`-Daten (2610 Level
+  aus dem langen Lauf vom Vortag) geloescht: ein Smoke-Test verwendete
+  eine `RunConfig(5, 3)` ohne eigenen `slug`, deren Name ("5b_3s") mit
+  dem echten Regime kollidierte, `Checkpoint.start()` trunkiert dort
+  standardmaessig. Alle anderen acht Regime sind unberuehrt (Zeilenzahlen
+  gegen das Lauf-Log geprueft). Neuerhebung von `5b_3s` auf Nutzerwunsch
+  zurueckgestellt, noch offen.
