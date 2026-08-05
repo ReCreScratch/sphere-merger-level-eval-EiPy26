@@ -231,3 +231,28 @@ abgewichen.
   Grid-Ansicht ist reine Sichtprüfung. Vor dem vollen 1000er-Lauf je
   Kugelanzahl ein 5-Level-Proberun gemacht (Nutzerwunsch), erst danach den
   vollen Lauf gestartet.
+
+## 2026-08-05
+- Läufe als Konfiguration statt als Skript-Konstanten: `RunConfig` +
+  `RUNS` + `select_runs` in `game/interesting_levels.py` (neu), die vier
+  produzierenden/lesenden Skripte (`agent_batch_timing.py`,
+  `shrink_top_levels.py`, `build_dashboard_data.py`,
+  `browse_batch_shrink.py`) beziehen Kugelanzahl, Schusszahl und
+  Dateipfade von dort, statt je ein eigenes `SPHERE_COUNTS` und ein
+  hartkodiertes `shot_count=2` zu halten. Anlass war der neue Lauf mit
+  3 Schüssen: die Schusszahl gehört damit in den Dateinamen
+  (`<n>b_<s>s`), die beiden bestehenden Läufe sind per `slug` auf ihre
+  alten Namen (`8b`, `5b`) festgenagelt -- Umbenennen hätte nur Diff
+  erzeugt (Nutzerentscheidung: nur Neues neu benennen).
+  Skript-Argumente wählen einzelne Läufe aus; ohne Argument laufen alle,
+  was die vorhandenen Daten der anderen Regimes überschreiben würde --
+  der Grund, warum die Auswahl überhaupt existiert.
+- Vor dem Start eine 30-Level-Kalibrierung gefahren, um die Laufzeit zu
+  schätzen (Nutzerfrage): 1.33 s/Level -> ~22 min, tatsächlich 22.0 min
+  (Batch 1041 s + Shrink 280 s). Der Lauf mit 3 Schüssen kostet Lookahead
+  zwei volle 2-Ply-Sweeps statt einem, was die kleinere Kugelzahl (6
+  statt 8) gerade wieder ausgleicht.
+- Dashboard-Umschalter auf `name` statt `sphere_count` umgestellt und um
+  die Schusszahl beschriftet -- „6 Kugeln" allein unterscheidet den neuen
+  Lauf nicht mehr eindeutig von einem künftigen 6-Kugel-Lauf mit anderer
+  Schusszahl.

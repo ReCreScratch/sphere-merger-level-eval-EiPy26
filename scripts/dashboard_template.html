@@ -1,0 +1,722 @@
+<title>Sphere Merger — Was macht ein Level interessant?</title>
+
+<style>
+  .viz-root {
+    color-scheme: light;
+    /* Neutral bewusst kuehl-violett gekippt -- abgeleitet aus der
+       Spielfeldfarbe des Renderers (30,30,40), nicht aus einem Default-Grau. */
+    --page: #f6f6fa;
+    --surface: #ffffff;
+    --surface-2: #eeeef4;
+    --ink: #12121a;
+    --ink-2: #4d4d5c;
+    --muted: #7b7b8c;
+    --grid: #e4e4ec;
+    --baseline: #c6c6d2;
+    --border: rgba(18, 18, 26, 0.11);
+    --lookahead: #2a78d6;
+    --greedy: #eb6834;
+    --random: #1baf7a;
+    --shadow: 0 1px 2px rgba(18, 18, 26, 0.05);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:where(:not([data-theme="light"])) .viz-root {
+      color-scheme: dark;
+      --page: #131319;
+      --surface: #1b1b24;
+      --surface-2: #24242f;
+      --ink: #f2f2f7;
+      --ink-2: #a9a9bc;
+      --muted: #8b8b9e;
+      --grid: #2b2b37;
+      --baseline: #3d3d4c;
+      --border: rgba(242, 242, 247, 0.12);
+      --lookahead: #3987e5;
+      --greedy: #d95926;
+      --random: #199e70;
+      --shadow: none;
+    }
+  }
+  :root[data-theme="dark"] .viz-root {
+    color-scheme: dark;
+    --page: #131319;
+    --surface: #1b1b24;
+    --surface-2: #24242f;
+    --ink: #f2f2f7;
+    --ink-2: #a9a9bc;
+    --muted: #8b8b9e;
+    --grid: #2b2b37;
+    --baseline: #3d3d4c;
+    --border: rgba(242, 242, 247, 0.12);
+    --lookahead: #3987e5;
+    --greedy: #d95926;
+    --random: #199e70;
+    --shadow: none;
+  }
+
+  * { box-sizing: border-box; }
+  body { margin: 0; }
+
+  .viz-root {
+    background: var(--page);
+    color: var(--ink);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    font-size: 15px;
+    line-height: 1.55;
+    padding: 40px 24px 80px;
+  }
+  .wrap { max-width: 1000px; margin: 0 auto; display: flex; flex-direction: column; gap: 40px; }
+
+  .eyebrow {
+    font-size: 11px; font-weight: 600; letter-spacing: 0.09em;
+    text-transform: uppercase; color: var(--muted); margin: 0 0 10px;
+  }
+  h1 { font-size: 30px; font-weight: 640; letter-spacing: -0.02em; margin: 0 0 10px; text-wrap: balance; }
+  .lede { color: var(--ink-2); margin: 0; max-width: 62ch; }
+  h2 { font-size: 19px; font-weight: 620; letter-spacing: -0.01em; margin: 0; text-wrap: balance; }
+  .section-note { color: var(--ink-2); margin: 6px 0 0; max-width: 66ch; font-size: 14px; }
+  section { display: flex; flex-direction: column; gap: 16px; }
+  .section-head { display: flex; flex-direction: column; }
+
+  /* Filterzeile: steuert alles darunter, steht deshalb ueber allem. */
+  .filters {
+    display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+    padding: 12px 16px; background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; box-shadow: var(--shadow);
+    position: sticky; top: 0; z-index: 5;
+  }
+  .filter-label { font-size: 12px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); }
+  .seg { display: flex; gap: 2px; padding: 2px; background: var(--surface-2); border-radius: 8px; }
+  .seg button {
+    font: inherit; font-size: 14px; font-weight: 550; color: var(--ink-2);
+    background: none; border: 0; border-radius: 6px; padding: 6px 16px; cursor: pointer;
+  }
+  .seg button:hover { color: var(--ink); }
+  .seg button[aria-pressed="true"] { background: var(--surface); color: var(--ink); box-shadow: var(--shadow); }
+  .seg button:focus-visible, .table-toggle:focus-visible, .chip:focus-visible {
+    outline: 2px solid var(--lookahead); outline-offset: 2px;
+  }
+  .filter-meta { margin-left: auto; font-size: 13px; color: var(--muted); }
+
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; }
+  .tile {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: 14px 16px 16px; box-shadow: var(--shadow);
+  }
+  .tile-label { font-size: 12px; color: var(--ink-2); margin: 0 0 4px; }
+  /* Proportionale Ziffern: tabular-nums laesst grosse Zahlen locker wirken. */
+  .tile-value { font-size: 27px; font-weight: 620; letter-spacing: -0.02em; margin: 0; }
+  .tile-sub { font-size: 12px; color: var(--muted); margin: 2px 0 0; }
+
+  .card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+    padding: 18px 20px 20px; box-shadow: var(--shadow);
+    display: flex; flex-direction: column; gap: 12px;
+  }
+  .card-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  .card-title { font-size: 15px; font-weight: 600; margin: 0; }
+  .card-note { font-size: 12.5px; color: var(--muted); margin: 0; }
+
+  .legend { display: flex; gap: 18px; flex-wrap: wrap; font-size: 13px; color: var(--ink-2); }
+  .legend-item { display: flex; align-items: center; gap: 7px; }
+  .swatch { width: 11px; height: 11px; border-radius: 3px; flex: none; }
+
+  svg { display: block; width: 100%; height: auto; overflow: visible; }
+  .grid-line { stroke: var(--grid); stroke-width: 1; }
+  .baseline-line { stroke: var(--baseline); stroke-width: 1; }
+  .axis-label { fill: var(--muted); font-size: 11px; }
+  .bar-value { fill: var(--ink-2); font-size: 11px; font-weight: 600; }
+  .hit { fill: transparent; cursor: pointer; }
+  .hit:focus-visible { outline: 2px solid var(--lookahead); outline-offset: -2px; }
+
+  .table-toggle {
+    font: inherit; font-size: 12.5px; color: var(--ink-2); background: none;
+    border: 1px solid var(--border); border-radius: 7px; padding: 5px 11px; cursor: pointer;
+  }
+  .table-toggle:hover { color: var(--ink); border-color: var(--baseline); }
+
+  .table-scroll { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  th, td { text-align: right; padding: 7px 10px; border-bottom: 1px solid var(--grid); font-variant-numeric: tabular-nums; }
+  th:first-child, td:first-child { text-align: left; font-variant-numeric: normal; }
+  th { color: var(--ink-2); font-weight: 560; white-space: nowrap; }
+  tbody tr:last-child td { border-bottom: 0; }
+  .seed { font-family: ui-monospace, "Cascadia Code", "SF Mono", Consolas, monospace; font-size: 12.5px; }
+
+  .chips { display: flex; gap: 8px; flex-wrap: wrap; }
+  .chip {
+    font: inherit; font-size: 13px; background: var(--surface); color: var(--ink-2);
+    border: 1px solid var(--border); border-radius: 999px; padding: 6px 14px; cursor: pointer;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .chip:hover { color: var(--ink); border-color: var(--baseline); }
+  .chip[aria-pressed="true"] { background: var(--ink); color: var(--page); border-color: var(--ink); }
+  .chip-count { font-variant-numeric: tabular-nums; font-weight: 620; }
+  .chip[aria-pressed="true"] .chip-count { color: var(--page); }
+
+  .callout {
+    background: var(--surface-2); border-radius: 10px; padding: 14px 16px;
+    font-size: 14px; color: var(--ink-2); border-left: 3px solid var(--lookahead);
+  }
+  .callout strong { color: var(--ink); font-weight: 620; }
+
+  .caveats { display: flex; flex-direction: column; gap: 12px; }
+  .caveat {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: 14px 16px; font-size: 14px; color: var(--ink-2); box-shadow: var(--shadow);
+  }
+  .caveat h3 { font-size: 14px; font-weight: 620; color: var(--ink); margin: 0 0 5px; }
+
+  .tooltip {
+    position: fixed; pointer-events: none; z-index: 20;
+    background: var(--surface); color: var(--ink);
+    border: 1px solid var(--border); border-radius: 8px;
+    padding: 9px 11px; font-size: 12.5px; line-height: 1.45;
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.2);
+    opacity: 0; transition: opacity 0.09s ease; max-width: 250px;
+  }
+  .tooltip.on { opacity: 1; }
+  .tt-title { font-weight: 620; margin-bottom: 3px; }
+  .tt-row { display: flex; align-items: center; gap: 7px; }
+  .tt-key { width: 9px; height: 9px; border-radius: 2px; flex: none; }
+  .tt-label { color: var(--ink-2); }
+  .tt-value { font-weight: 620; font-variant-numeric: tabular-nums; margin-left: auto; }
+
+  footer { color: var(--muted); font-size: 12.5px; border-top: 1px solid var(--grid); padding-top: 18px; }
+  footer code { font-family: ui-monospace, Consolas, monospace; font-size: 12px; }
+
+  .hidden { display: none; }
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 720px) {
+    .two-col { grid-template-columns: 1fr; }
+    h1 { font-size: 25px; }
+    .viz-root { padding: 28px 16px 60px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; animation: none !important; }
+  }
+</style>
+
+<div class="viz-root">
+  <div class="wrap">
+
+    <header>
+      <p class="eyebrow">Sphere Merger · Level-Evaluation</p>
+      <h1>Was macht ein Level interessant?</h1>
+      <p class="lede">
+        2000 zufällig erzeugte Level, je von drei Agenten gespielt: Zufall als
+        Grundlinie, Greedy als „naheliegender Zug“, Lookahead als Plan. Die Frage
+        ist nicht, welches Level schwer ist — sondern welches für einen Menschen
+        etwas zu entdecken hat.
+      </p>
+    </header>
+
+    <div class="filters">
+      <span class="filter-label">Startkugeln</span>
+      <div class="seg" id="seg" role="group" aria-label="Kugelanzahl wählen"></div>
+      <span class="filter-meta" id="filter-meta"></span>
+    </div>
+
+    <section>
+      <div class="tiles" id="tiles"></div>
+    </section>
+
+    <section>
+      <div class="section-head">
+        <h2>Der Gap: was das Naheliegende verschenkt</h2>
+        <p class="section-note">
+          Lookahead sucht bei zwei Schüssen praktisch erschöpfend und verliert
+          gegen Greedy in keinem einzigen der 2000 Level. Der Gap misst damit
+          nicht „zwei Strategien unterscheiden sich“, sondern gerichtet:
+          <em>was der naheliegende Zug gegen den besten verliert.</em>
+        </p>
+      </div>
+      <div class="card">
+        <div class="card-head">
+          <h3 class="card-title">Gap-Verteilung</h3>
+          <button class="table-toggle" data-toggle="t-gap">Tabelle</button>
+        </div>
+        <p class="card-note" id="gap-note"></p>
+        <div id="c-gap"></div>
+        <div class="table-scroll"><table id="t-gap" class="hidden"></table></div>
+      </div>
+    </section>
+
+    <section>
+      <div class="section-head">
+        <h2>Warum der Gap etwas bedeutet</h2>
+        <p class="section-note">
+          Ein Gap allein sagt nur, dass zwei Agenten sich unterscheiden. Die
+          Auszahlungsform sagt <em>warum</em>: Wie viel des Scores fällt erst auf
+          den letzten Schuss? Ein Level, das alles hinten auszahlt, bestraft
+          genau das Zugreifen, das Greedy ausmacht.
+        </p>
+      </div>
+      <div class="callout" id="threshold-callout"></div>
+      <div class="two-col">
+        <div class="card">
+          <div class="card-head">
+            <h3 class="card-title">Auszahlung nach Gap-Quartil</h3>
+            <button class="table-toggle" data-toggle="t-quart">Tabelle</button>
+          </div>
+          <p class="card-note">Median-Anteil des Scores auf dem letzten Schuss</p>
+          <div id="c-quart"></div>
+          <div class="table-scroll"><table id="t-quart" class="hidden"></table></div>
+        </div>
+        <div class="card">
+          <div class="card-head">
+            <h3 class="card-title">Auszahlungskonzentration</h3>
+            <button class="table-toggle" data-toggle="t-payoff">Tabelle</button>
+          </div>
+          <p class="card-note">Alle Level, Bins à 0.1</p>
+          <div id="c-payoff"></div>
+          <div class="table-scroll"><table id="t-payoff" class="hidden"></table></div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="section-head">
+        <h2>Können gegen Zufall</h2>
+        <p class="section-note">
+          Der Zufall spielt jedes Level 20-mal. Das trennt „schwer, weil tief“
+          von „schwer, weil würfelig“ — und zeigt, wie weit überhaupt jemand
+          über die Grundlinie kommt.
+        </p>
+      </div>
+      <div class="card">
+        <div class="card-head">
+          <h3 class="card-title">Score-Verteilung je Agent</h3>
+          <button class="table-toggle" data-toggle="t-score">Tabelle</button>
+        </div>
+        <div class="legend">
+          <span class="legend-item"><span class="swatch" style="background:var(--random)"></span>Zufall (Mittel aus 20)</span>
+          <span class="legend-item"><span class="swatch" style="background:var(--greedy)"></span>Greedy</span>
+          <span class="legend-item"><span class="swatch" style="background:var(--lookahead)"></span>Lookahead</span>
+        </div>
+        <div id="c-score"></div>
+        <div class="table-scroll"><table id="t-score" class="hidden"></table></div>
+      </div>
+    </section>
+
+    <section>
+      <div class="section-head">
+        <h2>Archetypen</h2>
+        <p class="section-note">
+          Statt einer „Fun“-Zahl, die genau die Unterschiede wegmittelt, um die
+          es geht: Tags. Sie schließen einander nicht aus, und ein Level ohne Tag
+          ist ein normales Level, kein gescheitertes. Schwellen sind relativ zum
+          jeweiligen Datensatz — Scores verschieben sich mit der Kugelanzahl zu
+          stark für feste Grenzen.
+        </p>
+      </div>
+      <div class="chips" id="chips"></div>
+      <div class="card">
+        <div class="card-head">
+          <h3 class="card-title" id="hl-title">Beispiele</h3>
+          <p class="card-note" id="hl-note"></p>
+        </div>
+        <div class="table-scroll"><table id="t-highlights"></table></div>
+      </div>
+    </section>
+
+    <section>
+      <div class="section-head">
+        <h2>Was die Daten nicht hergeben</h2>
+        <p class="section-note">
+          Die Grenzen gehören zum Ergebnis. Drei davon sind hart genug, um die
+          Aussagekraft der Metriken oben einzuschränken.
+        </p>
+      </div>
+      <div class="caveats">
+        <div class="caveat">
+          <h3>Lesbarkeit ist gar nicht gemessen</h3>
+          Ob ein Mensch den Plan überhaupt <em>sehen</em> kann, sagt keine dieser
+          Zahlen. „Lookahead findet es“ heißt nicht „ein Mensch findet es“. Der
+          Shrink-Lauf sollte das über die Anzahl wirklich benötigter Kugeln
+          annähern — trägt aber nicht: im Median wird nur <span id="cv-removed"></span>
+          von <span id="cv-total"></span> Kugeln entfernt. Die Level sind schlicht
+          nicht vollgestellt.
+        </div>
+        <div class="caveat">
+          <h3>Zielgenauigkeit fehlt komplett</h3>
+          Ein Plan, der nur in einem hauchdünnen Winkelfenster funktioniert, ist
+          für einen Menschen mit Maus keine Lösung, sondern eine Lotterie. Wie
+          breit dieses Fenster ist, wurde nie simuliert — das wäre die größte
+          einzelne Verbesserung an dieser Auswertung.
+        </div>
+        <div class="caveat">
+          <h3>Die Auszahlungsform ist teils strukturell</h3>
+          Rund drei Viertel aller Level zahlen ohnehin überwiegend hinten aus:
+          jeder Schuss findet mehr Kugeln vor als der davor, weil jeder selbst
+          eine dazulegt. Als eigenständige Achse trägt die Konzentration
+          deshalb weniger, als der Quartilsvergleich oben suggeriert — sie trennt
+          das unterste Gap-Quartil vom Rest, darüber sagt sie nichts mehr.
+        </div>
+      </div>
+    </section>
+
+    <footer id="footer"></footer>
+  </div>
+</div>
+
+<div class="tooltip" id="tooltip" role="status" aria-live="polite"></div>
+
+<script>
+  const DASHBOARD_DATA = /*__DATA__*/;
+
+  const SERIES_COLOR = {
+    random: "var(--random)",
+    greedy: "var(--greedy)",
+    lookahead: "var(--lookahead)",
+  };
+  const SERIES_LABEL = { random: "Zufall", greedy: "Greedy", lookahead: "Lookahead" };
+  const ARCHETYPES = [
+    ["aha", "Aha", "Höchster Gap zuerst — der naheliegende Zug ist hier eine Falle."],
+    ["spectacle", "Spektakel", "Längste Merge-Kette zuerst — laut, unabhängig von Tiefe."],
+    ["fair_hard", "Fair & hart", "Stärkster Können-Effekt zuerst — eine Idee, die der Zufall verlässlich verfehlt."],
+    ["luck", "Glück", "Höchster Zufalls-Trefferanteil zuerst — Planen bringt hier wenig."],
+  ];
+
+  const NS = "http://www.w3.org/2000/svg";
+  const de = (n, d = 0) => n.toLocaleString("de-DE", { minimumFractionDigits: d, maximumFractionDigits: d });
+  const el = (id) => document.getElementById(id);
+
+  let current = DASHBOARD_DATA.datasets[0].name;
+
+  /* Kugelanzahl allein reicht als Beschriftung nicht mehr: Läufe
+     unterscheiden sich auch in der Schusszahl, und die entscheidet mit
+     darüber, wie weit Lookahead überhaupt vorausplanen kann. */
+  const dsLabel = (d) => `${de(d.sphere_count)} Kugeln / ${de(d.meta.shot_count)} Schuss`;
+  let currentTag = "aha";
+
+  /* ---------- Tooltip ---------- */
+  const tip = el("tooltip");
+  function showTip(evt, title, rows) {
+    tip.replaceChildren();
+    if (title) {
+      const t = document.createElement("div");
+      t.className = "tt-title";
+      t.textContent = title;
+      tip.appendChild(t);
+    }
+    for (const r of rows) {
+      const row = document.createElement("div");
+      row.className = "tt-row";
+      if (r.color) {
+        const k = document.createElement("span");
+        k.className = "tt-key";
+        k.style.background = r.color;
+        row.appendChild(k);
+      }
+      const l = document.createElement("span");
+      l.className = "tt-label";
+      l.textContent = r.label;
+      const v = document.createElement("span");
+      v.className = "tt-value";
+      v.textContent = r.value;
+      row.append(l, v);
+      tip.appendChild(row);
+    }
+    tip.classList.add("on");
+    moveTip(evt);
+  }
+  function moveTip(evt) {
+    const src = evt.clientX !== undefined && evt.clientX !== 0
+      ? { x: evt.clientX, y: evt.clientY }
+      : (() => { const r = evt.target.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top }; })();
+    const x = Math.min(src.x + 16, window.innerWidth - tip.offsetWidth - 12);
+    const y = Math.min(src.y + 16, window.innerHeight - tip.offsetHeight - 12);
+    tip.style.left = Math.max(8, x) + "px";
+    tip.style.top = Math.max(8, y) + "px";
+  }
+  const hideTip = () => tip.classList.remove("on");
+
+  /* ---------- Chart ---------- */
+  // Muss auch Bruchteile treffen: die Auszahlungs-Quartile liegen um 0.95,
+  // eine feste Untergrenze (etwa "kleiner 5 -> 5") wuerde die Balken auf ein
+  // Fuenftel ihrer Hoehe druecken und den Unterschied unsichtbar machen.
+  function niceMax(n) {
+    if (n <= 0) return 1;
+    const step = Math.pow(10, Math.floor(Math.log10(n))) / 2;
+    return Math.ceil(n / step) * step;
+  }
+
+  /**
+   * Gruppiertes Balkendiagramm. `series`: [{key, values, color}].
+   * Balken sitzen mit 2px Luft nebeneinander (kein Rahmen), Datenende 4px
+   * gerundet und an der Grundlinie verankert.
+   */
+  function barChart(host, labels, series, opts = {}) {
+    const { valueFmt = (v) => de(v), unit = "", showValues = false, total = null } = opts;
+    const W = 900, H = opts.height || 250;
+    const padL = 46, padR = 14, padT = 14, padB = 34;
+    const plotW = W - padL - padR, plotH = H - padT - padB;
+    const maxV = niceMax(Math.max(1, ...series.flatMap((s) => s.values)));
+    const band = plotW / labels.length;
+    const GAP = 2;
+    const barW = Math.min((band - 12 - GAP * (series.length - 1)) / series.length, 30);
+
+    const svg = document.createElementNS(NS, "svg");
+    svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+    svg.setAttribute("role", "img");
+    svg.setAttribute("aria-label", opts.aria || "Balkendiagramm");
+
+    for (let i = 0; i <= 4; i++) {
+      const y = padT + plotH - (plotH * i) / 4;
+      const line = document.createElementNS(NS, "line");
+      line.setAttribute("x1", padL); line.setAttribute("x2", W - padR);
+      line.setAttribute("y1", y); line.setAttribute("y2", y);
+      line.setAttribute("class", i === 0 ? "baseline-line" : "grid-line");
+      svg.appendChild(line);
+      const t = document.createElementNS(NS, "text");
+      t.setAttribute("x", padL - 9); t.setAttribute("y", y + 4);
+      t.setAttribute("text-anchor", "end"); t.setAttribute("class", "axis-label");
+      t.textContent = valueFmt((maxV * i) / 4);
+      svg.appendChild(t);
+    }
+
+    labels.forEach((label, i) => {
+      const groupW = barW * series.length + GAP * (series.length - 1);
+      const gx = padL + i * band + (band - groupW) / 2;
+
+      series.forEach((s, si) => {
+        const v = s.values[i];
+        const h = (v / maxV) * plotH;
+        const x = gx + si * (barW + GAP);
+        const y = padT + plotH - h;
+        const rect = document.createElementNS(NS, "rect");
+        rect.setAttribute("x", x); rect.setAttribute("y", y);
+        rect.setAttribute("width", barW);
+        rect.setAttribute("height", Math.max(h, v > 0 ? 2 : 0));
+        rect.setAttribute("rx", 4);
+        rect.style.fill = s.color;
+        svg.appendChild(rect);
+
+        if (showValues && v > 0) {
+          const t = document.createElementNS(NS, "text");
+          t.setAttribute("x", x + barW / 2); t.setAttribute("y", y - 6);
+          t.setAttribute("text-anchor", "middle"); t.setAttribute("class", "bar-value");
+          t.textContent = valueFmt(v);
+          svg.appendChild(t);
+        }
+      });
+
+      // Trefferflaeche ueber die ganze Bandbreite -- deutlich groesser als
+      // der Balken, damit auch schmale Werte erreichbar bleiben.
+      const hit = document.createElementNS(NS, "rect");
+      hit.setAttribute("x", padL + i * band); hit.setAttribute("y", padT);
+      hit.setAttribute("width", band); hit.setAttribute("height", plotH);
+      hit.setAttribute("class", "hit");
+      hit.setAttribute("tabindex", "0");
+      hit.setAttribute("role", "button");
+      const rows = series.map((s) => ({
+        color: s.color,
+        label: s.label,
+        value: valueFmt(s.values[i]) + unit
+          + (total ? ` (${((s.values[i] / total) * 100).toFixed(1)}%)` : ""),
+      }));
+      const title = (opts.axisTitle || "") + label;
+      hit.setAttribute("aria-label", title + ": " + rows.map((r) => r.label + " " + r.value).join(", "));
+      hit.addEventListener("pointermove", (e) => showTip(e, title, rows));
+      hit.addEventListener("pointerleave", hideTip);
+      hit.addEventListener("focus", (e) => showTip(e, title, rows));
+      hit.addEventListener("blur", hideTip);
+      svg.appendChild(hit);
+
+      const t = document.createElementNS(NS, "text");
+      t.setAttribute("x", padL + i * band + band / 2); t.setAttribute("y", H - 11);
+      t.setAttribute("text-anchor", "middle"); t.setAttribute("class", "axis-label");
+      t.textContent = label;
+      svg.appendChild(t);
+    });
+
+    host.replaceChildren(svg);
+  }
+
+  function fillTable(table, head, rows) {
+    const thead = document.createElement("thead");
+    const hr = document.createElement("tr");
+    for (const h of head) {
+      const th = document.createElement("th");
+      th.textContent = h;
+      hr.appendChild(th);
+    }
+    thead.appendChild(hr);
+    const tbody = document.createElement("tbody");
+    for (const r of rows) {
+      const tr = document.createElement("tr");
+      for (const cell of r) {
+        const td = document.createElement("td");
+        if (cell !== null && typeof cell === "object") {
+          td.textContent = cell.seed;
+          td.className = "seed";
+        } else {
+          td.textContent = cell;
+        }
+        tr.appendChild(td);
+      }
+      tbody.appendChild(tr);
+    }
+    table.replaceChildren(thead, tbody);
+  }
+
+  /* ---------- Render ---------- */
+  function dataset() {
+    return DASHBOARD_DATA.datasets.find((d) => d.name === current);
+  }
+
+  function renderTiles(ds) {
+    const s = ds.summary;
+    const tiles = [
+      { label: "Level", value: de(ds.level_count), sub: `${ds.meta.shot_count} Schüsse · ${ds.meta.random_samples_per_level}× Zufall je Level` },
+      { label: "Gap (Median)", value: de(s.gap.median), sub: `Ø ${de(s.gap.mean, 1)} · max ${de(s.gap.max)}` },
+      { label: "Ø Lookahead", value: de(s.lookahead_score.mean, 1), sub: `Ø Greedy ${de(s.greedy_score.mean, 1)}` },
+      { label: "Ø Zufall", value: de(s.random_mean.mean, 1), sub: `Grundlinie aus ${ds.meta.random_samples_per_level} Läufen` },
+      { label: "Können-Effekt", value: de(s.skill_gain.median, 1) + " σ", sub: "Median über der Zufalls-Streuung" },
+    ];
+    el("tiles").replaceChildren(...tiles.map((t) => {
+      const d = document.createElement("div");
+      d.className = "tile";
+      d.innerHTML = `<p class="tile-label"></p><p class="tile-value"></p><p class="tile-sub"></p>`;
+      d.querySelector(".tile-label").textContent = t.label;
+      d.querySelector(".tile-value").textContent = t.value;
+      d.querySelector(".tile-sub").textContent = t.sub;
+      return d;
+    }));
+  }
+
+  function renderGap(ds) {
+    const h = ds.histograms.gap;
+    el("gap-note").textContent = `${de(ds.level_count)} Level, Bins à 10 Punkte`;
+    barChart(el("c-gap"), h.labels, [{ label: "Level", values: h.counts, color: SERIES_COLOR.lookahead }], {
+      total: ds.level_count, axisTitle: "Gap ", aria: "Verteilung der Gap-Werte",
+    });
+    fillTable(el("t-gap"), ["Gap", "Level", "Anteil"],
+      h.labels.map((l, i) => [l, de(h.counts[i]), ((h.counts[i] / ds.level_count) * 100).toFixed(1) + " %"]));
+  }
+
+  function renderQuartiles(ds) {
+    const q = ds.payoff_by_gap_quartile;
+    const keys = Object.keys(q);
+    const vals = keys.map((k) => q[k]);
+    const labels = ["Q1 (kleinster Gap)", "Q2", "Q3", "Q4 (größter Gap)"];
+    barChart(el("c-quart"), labels, [{ label: "Median-Anteil", values: vals, color: SERIES_COLOR.lookahead }], {
+      height: 230, valueFmt: (v) => v.toFixed(2), showValues: true, aria: "Auszahlungskonzentration je Gap-Quartil",
+    });
+    fillTable(el("t-quart"), ["Gap-Quartil", "Median-Anteil"], labels.map((l, i) => [l, vals[i].toFixed(2)]));
+
+    const jump = vals[1] - vals[0];
+    el("threshold-callout").innerHTML =
+      `Der Sprung liegt zwischen <strong>Q1 (${vals[0].toFixed(2)})</strong> und ` +
+      `<strong>Q2 (${vals[1].toFixed(2)})</strong> — danach ist die Kurve flach. ` +
+      `Das ist kein Gradient, sondern eine <strong>Schwelle</strong>: sobald überhaupt ein Gap ` +
+      `existiert, zahlt das Level hinten aus. Wie groß der Gap darüber hinaus ist, ` +
+      `sagt über die Form nichts mehr (+${jump.toFixed(2)} von Q1 auf Q2, ` +
+      `+${(vals[3] - vals[1]).toFixed(2)} über die restlichen drei Quartile).`;
+  }
+
+  function renderPayoff(ds) {
+    const h = ds.histograms.payoff_conc;
+    const total = h.counts.reduce((a, b) => a + b, 0);
+    barChart(el("c-payoff"), h.labels.map((l) => l.split("-")[1]), [
+      { label: "Level", values: h.counts, color: SERIES_COLOR.lookahead },
+    ], { height: 230, total, axisTitle: "bis ", aria: "Verteilung der Auszahlungskonzentration" });
+    fillTable(el("t-payoff"), ["Anteil bis", "Level"],
+      h.labels.map((l, i) => [l, de(h.counts[i])]));
+  }
+
+  function renderScores(ds) {
+    const h = ds.histograms.scores;
+    const series = ["random", "greedy", "lookahead"].map((k) => ({
+      label: SERIES_LABEL[k], values: h.series[k], color: SERIES_COLOR[k],
+    }));
+    barChart(el("c-score"), h.labels, series, {
+      height: 270, total: ds.level_count, axisTitle: "Score ", aria: "Score-Verteilung je Agent",
+    });
+    fillTable(el("t-score"), ["Score", "Zufall", "Greedy", "Lookahead"],
+      h.labels.map((l, i) => [l, de(h.series.random[i]), de(h.series.greedy[i]), de(h.series.lookahead[i])]));
+  }
+
+  function renderArchetypes(ds) {
+    el("chips").replaceChildren(...ARCHETYPES.map(([key, label]) => {
+      const b = document.createElement("button");
+      b.className = "chip";
+      b.type = "button";
+      b.setAttribute("aria-pressed", String(key === currentTag));
+      b.innerHTML = `<span></span><span class="chip-count"></span>`;
+      b.children[0].textContent = label;
+      b.children[1].textContent = de(ds.archetypes[key]);
+      b.addEventListener("click", () => { currentTag = key; renderArchetypes(ds); });
+      return b;
+    }));
+
+    const [, label, note] = ARCHETYPES.find(([k]) => k === currentTag);
+    const rows = ds.highlights[currentTag];
+    el("hl-title").textContent = `${label} — ${de(ds.archetypes[currentTag])} Level`;
+    el("hl-note").textContent = rows.length ? note : "Kein Level trägt diesen Tag in diesem Datensatz.";
+    fillTable(el("t-highlights"),
+      ["Seed", "Gap", "Greedy", "Lookahead", "Zufall Ø", "Auszahlung", "Können", "Combo"],
+      rows.map((r) => [
+        { seed: r.seed }, de(r.gap), de(r.greedy_score), de(r.lookahead_score),
+        de(r.random_mean, 1), r.payoff_conc === null ? "—" : r.payoff_conc.toFixed(2),
+        r.skill_gain === null ? "—" : r.skill_gain.toFixed(1) + " σ", de(r.max_combo),
+      ]));
+  }
+
+  function renderCaveats(ds) {
+    el("cv-removed").textContent = de(ds.summary.spheres_removed.median, 0);
+    el("cv-total").textContent = de(ds.sphere_count);
+  }
+
+  function renderFooter() {
+    const parts = DASHBOARD_DATA.datasets.map(
+      (d) => `${dsLabel(d)} (${de(d.level_count)} Level, Lauf vom ${d.meta.found_at ?? "?"})`);
+    el("footer").innerHTML =
+      `Quelle: <code>data/interesting_levels_&lt;lauf&gt;.json</code> + <code>shrunk_levels_&lt;lauf&gt;.json</code>, ` +
+      `aggregiert von <code>scripts/build_dashboard_data.py</code> zu <code>dashboard_data.json</code> ` +
+      `(Stand ${DASHBOARD_DATA.generated_at}). Datensätze: ${parts.join(" · ")}. ` +
+      `Kennzahl-Definitionen in <code>src/sphere_merger/metrics/</code>, Schema in <code>docs/data_schema.md</code>. ` +
+      `Seeds sind mit <code>scripts/browse_batch_shrink.py</code> direkt anspielbar.`;
+  }
+
+  function render() {
+    const ds = dataset();
+    el("filter-meta").textContent =
+      `${de(ds.level_count)} Level · Zielscore ${de(ds.meta.target_score)} · Schussgeschwindigkeit ${de(ds.meta.shot_speed)}`;
+    renderTiles(ds);
+    renderGap(ds);
+    renderQuartiles(ds);
+    renderPayoff(ds);
+    renderScores(ds);
+    renderArchetypes(ds);
+    renderCaveats(ds);
+  }
+
+  /* ---------- Init ---------- */
+  el("seg").replaceChildren(...DASHBOARD_DATA.datasets.map((d) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.textContent = dsLabel(d);
+    b.setAttribute("aria-pressed", String(d.name === current));
+    b.addEventListener("click", () => {
+      current = d.name;
+      [...el("seg").children].forEach((c) => c.setAttribute("aria-pressed", String(c === b)));
+      render();
+    });
+    return b;
+  }));
+
+  document.querySelectorAll(".table-toggle").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const t = el(btn.dataset.toggle);
+      const hidden = t.classList.toggle("hidden");
+      btn.textContent = hidden ? "Tabelle" : "Diagramm";
+      btn.setAttribute("aria-expanded", String(!hidden));
+    });
+  });
+
+  window.addEventListener("scroll", hideTip, { passive: true });
+  render();
+  renderFooter();
+</script>

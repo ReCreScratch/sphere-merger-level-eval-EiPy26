@@ -12,3 +12,6 @@ dist/
 # lokaler Rust-Toolchain (siehe README) + Cargo-Build-Artefakte
 .toolchain/
 native/*/target/
+
+# generierte Artefakte (scripts/build_dashboard.py)
+build/

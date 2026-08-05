@@ -5,9 +5,10 @@ the before/after results to their own dataset -- a shrunk level's sphere
 counts and gap are a different kind of record (before vs. after) than the
 plain per-seed scores there, not just another column on the same table.
 
-Runs once per entry in SPHERE_COUNTS, reading data/interesting_levels_<n>b
-.json and writing data/shrunk_levels_<n>b.json -- matches
-agent_batch_timing.py's per-sphere-count output files.
+Runs once per entry in `game.interesting_levels.RUNS`, reading that run's
+`interesting_path` and writing its `shrunk_path`. Command-line arguments
+select which runs to shrink (`... shrink_top_levels.py 6b_3s`); without
+any, all of them are re-shrunk.
 
 Lookahead's touched set on the *original* level comes straight from the
 lookahead_shots agent_batch_timing.py already recorded for every level --
@@ -32,24 +33,25 @@ anyway, on user request, to avoid a second full 2-ply sweep per level.
 Every candidate from the source file gets shrunk (not just a top slice)
 -- shrink_to_used_spheres is cheap enough that this is practical at the
 full 1000-level scale.
+
+The exact `meta`/`levels` schema saved here is documented in
+docs/data_schema.md -- update that doc in the same commit as any change
+to the `save_run(...)` call below (field added/removed/renamed).
 """
 
 from __future__ import annotations
 
+import sys
 import time
 from concurrent.futures import ProcessPoolExecutor
-from pathlib import Path
 
 from sphere_merger.agents.greedy_agent import GreedyAgent
 from sphere_merger.agents.runner import prepare_native_batch_worker, shrink_to_used_spheres
-from sphere_merger.game.interesting_levels import load_run, save_run
+from sphere_merger.game.interesting_levels import RunConfig, load_run, save_run, select_runs
 from sphere_merger.game.level import LevelDefinition, generate_random_level
 from sphere_merger.physics.boundary import Boundary
 from sphere_merger.physics.engine import native_backend
 from sphere_merger.physics.vector import Vector2
-
-SPHERE_COUNTS = (8, 5)
-DATA_DIR = Path(__file__).resolve().parents[1] / "data"
 
 FIELD = Boundary(x_min=-6.0, x_max=6.0, y_min=-6.0, y_max=6.0)
 SPAWN_MARGIN = 1.0
@@ -57,36 +59,28 @@ SPAWN = Vector2(FIELD.x_min + SPAWN_MARGIN, FIELD.y_min + SPAWN_MARGIN)
 SHOT_SPEED = 25.0
 
 
-def _source_path(sphere_count: int) -> Path:
-    return DATA_DIR / f"interesting_levels_{sphere_count}b.json"
-
-
-def _output_path(sphere_count: int) -> Path:
-    return DATA_DIR / f"shrunk_levels_{sphere_count}b.json"
-
-
-def _build_level(seed: int, sphere_count: int) -> LevelDefinition:
+def _build_level(seed: int, run: RunConfig) -> LevelDefinition:
     return generate_random_level(
         seed=seed,
         boundary=FIELD,
         spawn_position=SPAWN,
         target_score=999,
-        initial_sphere_count=sphere_count,
-        shot_count=2,
+        initial_sphere_count=run.sphere_count,
+        shot_count=run.shot_count,
         level_range=(0, 2),
     )
 
 
-def run_shrink(sphere_count: int, greedy: GreedyAgent) -> None:
-    """Shrink every level recorded for `sphere_count` and save the results."""
-    source = load_run(path=_source_path(sphere_count))
+def run_shrink(run: RunConfig, greedy: GreedyAgent) -> None:
+    """Shrink every level recorded for `run` and save the results."""
+    source = load_run(path=run.interesting_path)
     candidates = source["levels"]
 
     results = []
     total_start = time.perf_counter()
     for entry in candidates:
         seed = entry["seed"]
-        original = _build_level(seed, sphere_count)
+        original = _build_level(seed, run)
 
         # Already known from agent_batch_timing.py's run -- no need to
         # re-simulate lookahead's expensive 2-ply search just to learn
@@ -166,14 +160,14 @@ def run_shrink(sphere_count: int, greedy: GreedyAgent) -> None:
     total_elapsed = time.perf_counter() - total_start
 
     print(
-        f"\n{sphere_count} Kugeln: {len(candidates)} Level geshrinkt in {total_elapsed:.1f}s "
+        f"\n{run.name}: {len(candidates)} Level geshrinkt in {total_elapsed:.1f}s "
         f"({total_elapsed / len(candidates):.2f}s/Level)"
     )
 
     save_run(
         meta={
             "source_script": "shrink_top_levels.py",
-            "shrunk_from": str(_source_path(sphere_count)),
+            "shrunk_from": str(run.interesting_path),
             "field": {
                 "x_min": FIELD.x_min,
                 "x_max": FIELD.x_max,
@@ -182,13 +176,13 @@ def run_shrink(sphere_count: int, greedy: GreedyAgent) -> None:
             },
             "spawn_margin": SPAWN_MARGIN,
             "target_score": 999,
-            "initial_sphere_count": sphere_count,
-            "shot_count": 2,
+            "initial_sphere_count": run.sphere_count,
+            "shot_count": run.shot_count,
             "level_range": [0, 2],
             "shot_speed": SHOT_SPEED,
         },
         levels=results,
-        path=_output_path(sphere_count),
+        path=run.shrunk_path,
     )
 
 
@@ -198,5 +192,5 @@ if __name__ == "__main__":
         native_backend(),
     ):
         greedy_agent = GreedyAgent(speed=SHOT_SPEED, executor=executor)
-        for count in SPHERE_COUNTS:
-            run_shrink(count, greedy_agent)
+        for selected in select_runs(sys.argv[1:]):
+            run_shrink(selected, greedy_agent)

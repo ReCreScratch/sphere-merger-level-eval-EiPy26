@@ -1,0 +1,2171 @@
+{
+  "generated_at": "2026-08-05",
+  "datasets": [
+    {
+      "name": "8b",
+      "sphere_count": 8,
+      "level_count": 1000,
+      "meta": {
+        "shot_count": 2,
+        "target_score": 999,
+        "shot_speed": 25.0,
+        "level_range": [
+          0,
+          2
+        ],
+        "random_samples_per_level": 20,
+        "found_at": "2026-08-05"
+      },
+      "summary": {
+        "gap": {
+          "mean": 12.548,
+          "median": 10.0,
+          "min": 0.0,
+          "max": 78.0
+        },
+        "greedy_score": {
+          "mean": 38.06,
+          "median": 34.0,
+          "min": 10.0,
+          "max": 114.0
+        },
+        "lookahead_score": {
+          "mean": 50.608,
+          "median": 48.0,
+          "min": 16.0,
+          "max": 116.0
+        },
+        "random_mean": {
+          "mean": 8.2072,
+          "median": 7.7,
+          "min": 1.9,
+          "max": 27.1
+        },
+        "random_std": {
+          "mean": 6.297304939223651,
+          "median": 5.868130806495472,
+          "min": 0.9797958971132712,
+          "max": 20.367621363330574
+        },
+        "skill_gain": {
+          "mean": 7.5133886734773165,
+          "median": 6.882789330802018,
+          "min": 1.6893340403195911,
+          "max": 33.884608108500636
+        },
+        "payoff_conc": {
+          "mean": 0.8505081238987802,
+          "median": 0.9166666666666666,
+          "min": 0.043478260869565216,
+          "max": 1.0
+        },
+        "max_combo": {
+          "mean": 3.07,
+          "median": 3.0,
+          "min": 2.0,
+          "max": 5.0
+        },
+        "spheres_removed": {
+          "mean": 1.361,
+          "median": 1.0,
+          "min": 0.0,
+          "max": 6.0
+        }
+      },
+      "histograms": {
+        "gap": {
+          "labels": [
+            "0-9",
+            "10-19",
+            "20-29",
+            "30-39",
+            "40-49",
+            "50-59",
+            "60-69",
+            "70-79"
+          ],
+          "counts": [
+            492,
+            252,
+            150,
+            66,
+            31,
+            6,
+            2,
+            1
+          ]
+        },
+        "scores": {
+          "labels": [
+            "0-14",
+            "15-29",
+            "30-44",
+            "45-59",
+            "60-74",
+            "75-89",
+            "90-104",
+            "105-119"
+          ],
+          "series": {
+            "random": [
+              962,
+              38,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "greedy": [
+              12,
+              313,
+              430,
+              121,
+              88,
+              27,
+              7,
+              2
+            ],
+            "lookahead": [
+              0,
+              34,
+              409,
+              298,
+              158,
+              75,
+              11,
+              15
+            ]
+          }
+        },
+        "payoff_conc": {
+          "labels": [
+            "0.00-0.10",
+            "0.10-0.20",
+            "0.20-0.30",
+            "0.30-0.40",
+            "0.40-0.50",
+            "0.50-0.60",
+            "0.60-0.70",
+            "0.70-0.80",
+            "0.80-0.90",
+            "0.90-1.00"
+          ],
+          "counts": [
+            4,
+            10,
+            17,
+            14,
+            16,
+            43,
+            79,
+            63,
+            216,
+            538
+          ]
+        },
+        "skill_gain": {
+          "labels": [
+            "0-1",
+            "2-3",
+            "4-5",
+            "6-7",
+            "8-9",
+            "10-11",
+            "12-13",
+            "14-15",
+            "16-17",
+            "18-19",
+            "20-21",
+            "22-23",
+            "24-25",
+            "26-27",
+            "28-29",
+            "30-31",
+            "32-33"
+          ],
+          "counts": [
+            3,
+            113,
+            270,
+            263,
+            160,
+            89,
+            49,
+            25,
+            16,
+            4,
+            4,
+            0,
+            1,
+            1,
+            1,
+            0,
+            1
+          ]
+        }
+      },
+      "archetypes": {
+        "aha": 149,
+        "spectacle": 9,
+        "fair_hard": 15,
+        "luck": 16,
+        "untagged": 826
+      },
+      "payoff_by_gap_quartile": {
+        "Q1": 0.6666666666666666,
+        "Q2": 0.9444444444444444,
+        "Q3": 0.9473684210526315,
+        "Q4": 0.9629629629629629
+      },
+      "highlights": {
+        "aha": [
+          {
+            "seed": 775935420,
+            "gap": 78,
+            "greedy_score": 38,
+            "lookahead_score": 116,
+            "random_mean": 9.1,
+            "payoff_conc": 0.93,
+            "skill_gain": 15.2,
+            "max_combo": 4,
+            "tags": [
+              "aha"
+            ]
+          },
+          {
+            "seed": 941303715,
+            "gap": 64,
+            "greedy_score": 44,
+            "lookahead_score": 108,
+            "random_mean": 7.1,
+            "payoff_conc": 1.0,
+            "skill_gain": 17.3,
+            "max_combo": 4,
+            "tags": [
+              "aha"
+            ]
+          },
+          {
+            "seed": 610248025,
+            "gap": 64,
+            "greedy_score": 48,
+            "lookahead_score": 112,
+            "random_mean": 12.6,
+            "payoff_conc": 0.93,
+            "skill_gain": 10.3,
+            "max_combo": 4,
+            "tags": [
+              "aha"
+            ]
+          },
+          {
+            "seed": 121875398,
+            "gap": 54,
+            "greedy_score": 12,
+            "lookahead_score": 66,
+            "random_mean": 4.3,
+            "payoff_conc": 1.0,
+            "skill_gain": 8.2,
+            "max_combo": 4,
+            "tags": [
+              "aha"
+            ]
+          },
+          {
+            "seed": 454005832,
+            "gap": 54,
+            "greedy_score": 20,
+            "lookahead_score": 74,
+            "random_mean": 11.2,
+            "payoff_conc": 0.97,
+            "skill_gain": 14.6,
+            "max_combo": 3,
+            "tags": [
+              "aha"
+            ]
+          },
+          {
+            "seed": 195642411,
+            "gap": 50,
+            "greedy_score": 16,
+            "lookahead_score": 66,
+            "random_mean": 3.5,
+            "payoff_conc": 1.0,
+            "skill_gain": 13.1,
+            "max_combo": 4,
+            "tags": [
+              "aha",
+              "fair_hard"
+            ]
+          },
+          {
+            "seed": 166378655,
+            "gap": 50,
+            "greedy_score": 22,
+            "lookahead_score": 72,
+            "random_mean": 6.9,
+            "payoff_conc": 1.0,
+            "skill_gain": 17.3,
+            "max_combo": 3,
+            "tags": [
+              "aha"
+            ]
+          },
+          {
+            "seed": 852962643,
+            "gap": 48,
+            "greedy_score": 28,
+            "lookahead_score": 76,
+            "random_mean": 8.8,
+            "payoff_conc": 1.0,
+            "skill_gain": 8.1,
+            "max_combo": 4,
+            "tags": [
+              "aha"
+            ]
+          },
+          {
+            "seed": 67676756,
+            "gap": 48,
+            "greedy_score": 26,
+            "lookahead_score": 74,
+            "random_mean": 5.9,
+            "payoff_conc": 1.0,
+            "skill_gain": 10.1,
+            "max_combo": 5,
+            "tags": [
+              "aha",
+              "spectacle"
+            ]
+          },
+          {
+            "seed": 357572615,
+            "gap": 48,
+            "greedy_score": 64,
+            "lookahead_score": 112,
+            "random_mean": 13.3,
+            "payoff_conc": 1.0,
+            "skill_gain": 9.8,
+            "max_combo": 4,
+            "tags": [
+              "aha"
+            ]
+          }
+        ],
+        "spectacle": [
+          {
+            "seed": 247594939,
+            "gap": 44,
+            "greedy_score": 50,
+            "lookahead_score": 94,
+            "random_mean": 8,
+            "payoff_conc": 1.0,
+            "skill_gain": 13.6,
+            "max_combo": 5,
+            "tags": [
+              "aha",
+              "spectacle"
+            ]
+          },
+          {
+            "seed": 9172571,
+            "gap": 40,
+            "greedy_score": 54,
+            "lookahead_score": 94,
+            "random_mean": 9.5,
+            "payoff_conc": 1.0,
+            "skill_gain": 7.2,
+            "max_combo": 5,
+            "tags": [
+              "aha",
+              "spectacle"
+            ]
+          },
+          {
+            "seed": 33190629,
+            "gap": 36,
+            "greedy_score": 54,
+            "lookahead_score": 90,
+            "random_mean": 7.4,
+            "payoff_conc": 1.0,
+            "skill_gain": 11.7,
+            "max_combo": 5,
+            "tags": [
+              "aha",
+              "spectacle"
+            ]
+          },
+          {
+            "seed": 665814573,
+            "gap": 36,
+            "greedy_score": 50,
+            "lookahead_score": 86,
+            "random_mean": 7.4,
+            "payoff_conc": 1.0,
+            "skill_gain": 7.3,
+            "max_combo": 5,
+            "tags": [
+              "aha",
+              "spectacle"
+            ]
+          },
+          {
+            "seed": 575225691,
+            "gap": 8,
+            "greedy_score": 74,
+            "lookahead_score": 82,
+            "random_mean": 6.8,
+            "payoff_conc": 0.95,
+            "skill_gain": 9.1,
+            "max_combo": 5,
+            "tags": [
+              "spectacle"
+            ]
+          },
+          {
+            "seed": 911201467,
+            "gap": 36,
+            "greedy_score": 44,
+            "lookahead_score": 80,
+            "random_mean": 14.7,
+            "payoff_conc": 1.0,
+            "skill_gain": 9.0,
+            "max_combo": 5,
+            "tags": [
+              "aha",
+              "spectacle"
+            ]
+          },
+          {
+            "seed": 67676756,
+            "gap": 48,
+            "greedy_score": 26,
+            "lookahead_score": 74,
+            "random_mean": 5.9,
+            "payoff_conc": 1.0,
+            "skill_gain": 10.1,
+            "max_combo": 5,
+            "tags": [
+              "aha",
+              "spectacle"
+            ]
+          },
+          {
+            "seed": 817186833,
+            "gap": 26,
+            "greedy_score": 48,
+            "lookahead_score": 74,
+            "random_mean": 7.7,
+            "payoff_conc": 1.0,
+            "skill_gain": 13.1,
+            "max_combo": 5,
+            "tags": [
+              "aha",
+              "spectacle"
+            ]
+          },
+          {
+            "seed": 944227734,
+            "gap": 32,
+            "greedy_score": 40,
+            "lookahead_score": 72,
+            "random_mean": 6.2,
+            "payoff_conc": 1.0,
+            "skill_gain": 7.0,
+            "max_combo": 5,
+            "tags": [
+              "aha",
+              "spectacle"
+            ]
+          }
+        ],
+        "fair_hard": [
+          {
+            "seed": 306832349,
+            "gap": 0,
+            "greedy_score": 110,
+            "lookahead_score": 110,
+            "random_mean": 5.5,
+            "payoff_conc": 0.6,
+            "skill_gain": 26.5,
+            "max_combo": 3,
+            "tags": [
+              "fair_hard"
+            ]
+          },
+          {
+            "seed": 810907732,
+            "gap": 34,
+            "greedy_score": 32,
+            "lookahead_score": 66,
+            "random_mean": 3.5,
+            "payoff_conc": 1.0,
+            "skill_gain": 21.1,
+            "max_combo": 4,
+            "tags": [
+              "aha",
+              "fair_hard"
+            ]
+          },
+          {
+            "seed": 68104766,
+            "gap": 0,
+            "greedy_score": 74,
+            "lookahead_score": 74,
+            "random_mean": 2.8,
+            "payoff_conc": 0.89,
+            "skill_gain": 20.4,
+            "max_combo": 3,
+            "tags": [
+              "fair_hard"
+            ]
+          },
+          {
+            "seed": 395666900,
+            "gap": 38,
+            "greedy_score": 28,
+            "lookahead_score": 66,
+            "random_mean": 5.2,
+            "payoff_conc": 0.97,
+            "skill_gain": 17.4,
+            "max_combo": 4,
+            "tags": [
+              "aha",
+              "fair_hard"
+            ]
+          },
+          {
+            "seed": 702337332,
+            "gap": 0,
+            "greedy_score": 82,
+            "lookahead_score": 82,
+            "random_mean": 4.3,
+            "payoff_conc": 0.8,
+            "skill_gain": 16.2,
+            "max_combo": 3,
+            "tags": [
+              "fair_hard"
+            ]
+          },
+          {
+            "seed": 971084084,
+            "gap": 46,
+            "greedy_score": 16,
+            "lookahead_score": 62,
+            "random_mean": 3.1,
+            "payoff_conc": 1.0,
+            "skill_gain": 16.1,
+            "max_combo": 4,
+            "tags": [
+              "aha",
+              "fair_hard"
+            ]
+          },
+          {
+            "seed": 304500991,
+            "gap": 36,
+            "greedy_score": 28,
+            "lookahead_score": 64,
+            "random_mean": 3.2,
+            "payoff_conc": 0.97,
+            "skill_gain": 15.9,
+            "max_combo": 4,
+            "tags": [
+              "aha",
+              "fair_hard"
+            ]
+          },
+          {
+            "seed": 101227712,
+            "gap": 0,
+            "greedy_score": 76,
+            "lookahead_score": 76,
+            "random_mean": 4.6,
+            "payoff_conc": 0.89,
+            "skill_gain": 15.1,
+            "max_combo": 3,
+            "tags": [
+              "fair_hard"
+            ]
+          },
+          {
+            "seed": 542567037,
+            "gap": 40,
+            "greedy_score": 28,
+            "lookahead_score": 68,
+            "random_mean": 5.1,
+            "payoff_conc": 0.88,
+            "skill_gain": 14.7,
+            "max_combo": 3,
+            "tags": [
+              "fair_hard"
+            ]
+          },
+          {
+            "seed": 722366604,
+            "gap": 38,
+            "greedy_score": 26,
+            "lookahead_score": 64,
+            "random_mean": 4.3,
+            "payoff_conc": 1.0,
+            "skill_gain": 14.0,
+            "max_combo": 4,
+            "tags": [
+              "aha",
+              "fair_hard"
+            ]
+          }
+        ],
+        "luck": [
+          {
+            "seed": 719674109,
+            "gap": 0,
+            "greedy_score": 48,
+            "lookahead_score": 48,
+            "random_mean": 14.8,
+            "payoff_conc": 0.83,
+            "skill_gain": 2.8,
+            "max_combo": 2,
+            "tags": [
+              "luck"
+            ]
+          },
+          {
+            "seed": 153718053,
+            "gap": 0,
+            "greedy_score": 24,
+            "lookahead_score": 24,
+            "random_mean": 8,
+            "payoff_conc": 0.83,
+            "skill_gain": 2.8,
+            "max_combo": 2,
+            "tags": [
+              "luck"
+            ]
+          },
+          {
+            "seed": 578026135,
+            "gap": 0,
+            "greedy_score": 48,
+            "lookahead_score": 48,
+            "random_mean": 13.2,
+            "payoff_conc": 0.83,
+            "skill_gain": 3.8,
+            "max_combo": 2,
+            "tags": [
+              "luck"
+            ]
+          },
+          {
+            "seed": 291650293,
+            "gap": 0,
+            "greedy_score": 60,
+            "lookahead_score": 60,
+            "random_mean": 8.5,
+            "payoff_conc": 0.67,
+            "skill_gain": 3.8,
+            "max_combo": 2,
+            "tags": [
+              "luck"
+            ]
+          },
+          {
+            "seed": 833246513,
+            "gap": 0,
+            "greedy_score": 48,
+            "lookahead_score": 48,
+            "random_mean": 11.7,
+            "payoff_conc": 0.83,
+            "skill_gain": 3.7,
+            "max_combo": 2,
+            "tags": [
+              "luck"
+            ]
+          },
+          {
+            "seed": 700345811,
+            "gap": 0,
+            "greedy_score": 54,
+            "lookahead_score": 54,
+            "random_mean": 16.1,
+            "payoff_conc": 0.37,
+            "skill_gain": 2.5,
+            "max_combo": 3,
+            "tags": [
+              "luck"
+            ]
+          },
+          {
+            "seed": 281670921,
+            "gap": 0,
+            "greedy_score": 36,
+            "lookahead_score": 36,
+            "random_mean": 9.2,
+            "payoff_conc": 0.94,
+            "skill_gain": 2.7,
+            "max_combo": 3,
+            "tags": [
+              "luck"
+            ]
+          },
+          {
+            "seed": 283582359,
+            "gap": 0,
+            "greedy_score": 60,
+            "lookahead_score": 60,
+            "random_mean": 16,
+            "payoff_conc": 0.67,
+            "skill_gain": 3.4,
+            "max_combo": 2,
+            "tags": [
+              "luck"
+            ]
+          },
+          {
+            "seed": 188163333,
+            "gap": 0,
+            "greedy_score": 20,
+            "lookahead_score": 20,
+            "random_mean": 4.6,
+            "payoff_conc": 0.9,
+            "skill_gain": 3.3,
+            "max_combo": 3,
+            "tags": [
+              "luck"
+            ]
+          },
+          {
+            "seed": 40755289,
+            "gap": 0,
+            "greedy_score": 44,
+            "lookahead_score": 44,
+            "random_mean": 14,
+            "payoff_conc": 0.45,
+            "skill_gain": 3.3,
+            "max_combo": 3,
+            "tags": [
+              "luck"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "5b",
+      "sphere_count": 5,
+      "level_count": 1000,
+      "meta": {
+        "shot_count": 2,
+        "target_score": 999,
+        "shot_speed": 25.0,
+        "level_range": [
+          0,
+          2
+        ],
+        "random_samples_per_level": 20,
+        "found_at": "2026-08-05"
+      },
+      "summary": {
+        "gap": {
+          "mean": 8.434,
+          "median": 8.0,
+          "min": 0.0,
+          "max": 48.0
+        },
+        "greedy_score": {
+          "mean": 23.174,
+          "median": 22.0,
+          "min": 4.0,
+          "max": 84.0
+        },
+        "lookahead_score": {
+          "mean": 31.608,
+          "median": 30.0,
+          "min": 10.0,
+          "max": 104.0
+        },
+        "random_mean": {
+          "mean": 4.9295,
+          "median": 4.45,
+          "min": 0,
+          "max": 17.8
+        },
+        "random_std": {
+          "mean": 4.470033861067589,
+          "median": 4.251468341254851,
+          "min": 0.0,
+          "max": 12.77654100294755
+        },
+        "skill_gain": {
+          "mean": 7.054731773778293,
+          "median": 6.009364525977687,
+          "min": 0.9045340337332912,
+          "max": 42.99999999999999
+        },
+        "payoff_conc": {
+          "mean": 0.8848081826937338,
+          "median": 0.949874686716792,
+          "min": 0.0,
+          "max": 1.0
+        },
+        "max_combo": {
+          "mean": 2.501,
+          "median": 2.0,
+          "min": 1.0,
+          "max": 4.0
+        },
+        "spheres_removed": {
+          "mean": 0.765,
+          "median": 1.0,
+          "min": 0.0,
+          "max": 3.0
+        }
+      },
+      "histograms": {
+        "gap": {
+          "labels": [
+            "0-9",
+            "10-19",
+            "20-29",
+            "30-39",
+            "40-49"
+          ],
+          "counts": [
+            602,
+            280,
+            92,
+            21,
+            5
+          ]
+        },
+        "scores": {
+          "labels": [
+            "0-14",
+            "15-29",
+            "30-44",
+            "45-59",
+            "60-74",
+            "75-89",
+            "90-104"
+          ],
+          "series": {
+            "random": [
+              997,
+              3,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "greedy": [
+              246,
+              580,
+              91,
+              55,
+              19,
+              9,
+              0
+            ],
+            "lookahead": [
+              34,
+              452,
+              379,
+              90,
+              30,
+              14,
+              1
+            ]
+          }
+        },
+        "payoff_conc": {
+          "labels": [
+            "0.00-0.10",
+            "0.10-0.20",
+            "0.20-0.30",
+            "0.30-0.40",
+            "0.40-0.50",
+            "0.50-0.60",
+            "0.60-0.70",
+            "0.70-0.80",
+            "0.80-0.90",
+            "0.90-1.00"
+          ],
+          "counts": [
+            5,
+            23,
+            8,
+            8,
+            6,
+            16,
+            36,
+            33,
+            229,
+            636
+          ]
+        },
+        "skill_gain": {
+          "labels": [
+            "0-1",
+            "2-3",
+            "4-5",
+            "6-7",
+            "8-9",
+            "10-11",
+            "12-13",
+            "14-15",
+            "16-17",
+            "18-19",
+            "20-21",
+            "22-23",
+            "24-25",
+            "26-27",
+            "28-29",
+            "30-31",
+            "32-33",
+            "34-35",
+            "36-37",
+            "38-39",
+            "40-41",
+            "42-43"
+          ],
+          "counts": [
+            23,
+            233,
+            239,
+            188,
+            135,
+            76,
+            37,
+            32,
+            17,
+            2,
+            2,
+            4,
+            1,
+            5,
+            2,
+            0,
+            2,
+            0,
+            0,
+            0,
+            0,
+            1
+          ]
+        }
+      },
+      "archetypes": {
+        "aha": 193,
+        "spectacle": 17,
+        "fair_hard": 12,
+        "luck": 73,
+        "untagged": 726
+      },
+      "payoff_by_gap_quartile": {
+        "Q1": 0.8333333333333334,
+        "Q2": 0.9090909090909091,
+        "Q3": 1.0,
+        "Q4": 1.0
+      },
+      "highlights": {
+        "aha": [
+          {
+            "seed": 381390377,
+            "gap": 48,
+            "greedy_score": 18,
+            "lookahead_score": 66,
+            "random_mean": 4.2,
+            "payoff_conc": 1.0,
+            "skill_gain": 15.9,
+            "max_combo": 4,
+            "tags": [
+              "aha",
+              "spectacle"
+            ]
+          },
+          {
+            "seed": 285252987,
+            "gap": 48,
+            "greedy_score": 18,
+            "lookahead_score": 66,
+            "random_mean": 3.3,
+            "payoff_conc": 1.0,
+            "skill_gain": 11.4,
+            "max_combo": 4,
+            "tags": [
+              "aha",
+              "spectacle"
+            ]
+          },
+          {
+            "seed": 694916912,
+            "gap": 44,
+            "greedy_score": 60,
+            "lookahead_score": 104,
+            "random_mean": 7.4,
+            "payoff_conc": 1.0,
+            "skill_gain": 12.9,
+            "max_combo": 4,
+            "tags": [
+              "aha",
+              "spectacle"
+            ]
+          },
+          {
+            "seed": 601505208,
+            "gap": 36,
+            "greedy_score": 18,
+            "lookahead_score": 54,
+            "random_mean": 6.5,
+            "payoff_conc": 1.0,
+            "skill_gain": 6.9,
+            "max_combo": 4,
+            "tags": [
+              "aha",
+              "spectacle"
+            ]
+          },
+          {
+            "seed": 364068970,
+            "gap": 36,
+            "greedy_score": 18,
+            "lookahead_score": 54,
+            "random_mean": 5.4,
+            "payoff_conc": 1.0,
+            "skill_gain": 9.2,
+            "max_combo": 4,
+            "tags": [
+              "aha",
+              "spectacle"
+            ]
+          },
+          {
+            "seed": 482575174,
+            "gap": 36,
+            "greedy_score": 18,
+            "lookahead_score": 54,
+            "random_mean": 4.3,
+            "payoff_conc": 1.0,
+            "skill_gain": 9.8,
+            "max_combo": 4,
+            "tags": [
+              "aha",
+              "spectacle"
+            ]
+          },
+          {
+            "seed": 286351472,
+            "gap": 36,
+            "greedy_score": 10,
+            "lookahead_score": 46,
+            "random_mean": 4.1,
+            "payoff_conc": 0.96,
+            "skill_gain": 10.4,
+            "max_combo": 3,
+            "tags": [
+              "aha"
+            ]
+          },
+          {
+            "seed": 970283420,
+            "gap": 34,
+            "greedy_score": 10,
+            "lookahead_score": 44,
+            "random_mean": 3.1,
+            "payoff_conc": 1.0,
+            "skill_gain": 10.0,
+            "max_combo": 3,
+            "tags": [
+              "aha"
+            ]
+          },
+          {
+            "seed": 97358905,
+            "gap": 34,
+            "greedy_score": 10,
+            "lookahead_score": 44,
+            "random_mean": 6.6,
+            "payoff_conc": 1.0,
+            "skill_gain": 4.0,
+            "max_combo": 3,
+            "tags": [
+              "aha"
+            ]
+          },
+          {
+            "seed": 872472065,
+            "gap": 32,
+            "greedy_score": 12,
+            "lookahead_score": 44,
+            "random_mean": 8,
+            "payoff_conc": 1.0,
+            "skill_gain": 7.6,
+            "max_combo": 3,
+            "tags": [
+              "aha"
+            ]
+          }
+        ],
+        "spectacle": [
+          {
+            "seed": 694916912,
+            "gap": 44,
+            "greedy_score": 60,
+            "lookahead_score": 104,
+            "random_mean": 7.4,
+            "payoff_conc": 1.0,
+            "skill_gain": 12.9,
+            "max_combo": 4,
+            "tags": [
+              "aha",
+              "spectacle"
+            ]
+          },
+          {
+            "seed": 248840528,
+            "gap": 28,
+            "greedy_score": 40,
+            "lookahead_score": 68,
+            "random_mean": 8.6,
+            "payoff_conc": 1.0,
+            "skill_gain": 8.0,
+            "max_combo": 4,
+            "tags": [
+              "aha",
+              "spectacle"
+            ]
+          },
+          {
+            "seed": 381390377,
+            "gap": 48,
+            "greedy_score": 18,
+            "lookahead_score": 66,
+            "random_mean": 4.2,
+            "payoff_conc": 1.0,
+            "skill_gain": 15.9,
+            "max_combo": 4,
+            "tags": [
+              "aha",
+              "spectacle"
+            ]
+          },
+          {
+            "seed": 285252987,
+            "gap": 48,
+            "greedy_score": 18,
+            "lookahead_score": 66,
+            "random_mean": 3.3,
+            "payoff_conc": 1.0,
+            "skill_gain": 11.4,
+            "max_combo": 4,
+            "tags": [
+              "aha",
+              "spectacle"
+            ]
+          },
+          {
+            "seed": 990153122,
+            "gap": 20,
+            "greedy_score": 42,
+            "lookahead_score": 62,
+            "random_mean": 9.4,
+            "payoff_conc": 1.0,
+            "skill_gain": 5.2,
+            "max_combo": 4,
+            "tags": [
+              "aha",
+              "spectacle"
+            ]
+          },
+          {
+            "seed": 48936618,
+            "gap": 16,
+            "greedy_score": 38,
+            "lookahead_score": 54,
+            "random_mean": 3.5,
+            "payoff_conc": 0.93,
+            "skill_gain": 26.8,
+            "max_combo": 4,
+            "tags": [
+              "aha",
+              "spectacle"
+            ]
+          },
+          {
+            "seed": 914683810,
+            "gap": 20,
+            "greedy_score": 34,
+            "lookahead_score": 54,
+            "random_mean": 2.7,
+            "payoff_conc": 1.0,
+            "skill_gain": 15.3,
+            "max_combo": 4,
+            "tags": [
+              "aha",
+              "fair_hard",
+              "spectacle"
+            ]
+          },
+          {
+            "seed": 601505208,
+            "gap": 36,
+            "greedy_score": 18,
+            "lookahead_score": 54,
+            "random_mean": 6.5,
+            "payoff_conc": 1.0,
+            "skill_gain": 6.9,
+            "max_combo": 4,
+            "tags": [
+              "aha",
+              "spectacle"
+            ]
+          },
+          {
+            "seed": 364068970,
+            "gap": 36,
+            "greedy_score": 18,
+            "lookahead_score": 54,
+            "random_mean": 5.4,
+            "payoff_conc": 1.0,
+            "skill_gain": 9.2,
+            "max_combo": 4,
+            "tags": [
+              "aha",
+              "spectacle"
+            ]
+          },
+          {
+            "seed": 482575174,
+            "gap": 36,
+            "greedy_score": 18,
+            "lookahead_score": 54,
+            "random_mean": 4.3,
+            "payoff_conc": 1.0,
+            "skill_gain": 9.8,
+            "max_combo": 4,
+            "tags": [
+              "aha",
+              "spectacle"
+            ]
+          }
+        ],
+        "fair_hard": [
+          {
+            "seed": 857811763,
+            "gap": 28,
+            "greedy_score": 18,
+            "lookahead_score": 46,
+            "random_mean": 1.9,
+            "payoff_conc": 1.0,
+            "skill_gain": 22.7,
+            "max_combo": 4,
+            "tags": [
+              "aha",
+              "fair_hard",
+              "spectacle"
+            ]
+          },
+          {
+            "seed": 592610545,
+            "gap": 30,
+            "greedy_score": 22,
+            "lookahead_score": 52,
+            "random_mean": 2.6,
+            "payoff_conc": 1.0,
+            "skill_gain": 22.5,
+            "max_combo": 4,
+            "tags": [
+              "aha",
+              "fair_hard",
+              "spectacle"
+            ]
+          },
+          {
+            "seed": 836674965,
+            "gap": 28,
+            "greedy_score": 22,
+            "lookahead_score": 50,
+            "random_mean": 1.9,
+            "payoff_conc": 1.0,
+            "skill_gain": 17.7,
+            "max_combo": 4,
+            "tags": [
+              "aha",
+              "fair_hard",
+              "spectacle"
+            ]
+          },
+          {
+            "seed": 990148350,
+            "gap": 0,
+            "greedy_score": 48,
+            "lookahead_score": 48,
+            "random_mean": 2,
+            "payoff_conc": 0.83,
+            "skill_gain": 15.5,
+            "max_combo": 2,
+            "tags": [
+              "fair_hard"
+            ]
+          },
+          {
+            "seed": 914683810,
+            "gap": 20,
+            "greedy_score": 34,
+            "lookahead_score": 54,
+            "random_mean": 2.7,
+            "payoff_conc": 1.0,
+            "skill_gain": 15.3,
+            "max_combo": 4,
+            "tags": [
+              "aha",
+              "fair_hard",
+              "spectacle"
+            ]
+          },
+          {
+            "seed": 791493573,
+            "gap": 8,
+            "greedy_score": 30,
+            "lookahead_score": 38,
+            "random_mean": 2.9,
+            "payoff_conc": 0.95,
+            "skill_gain": 14.1,
+            "max_combo": 3,
+            "tags": [
+              "fair_hard"
+            ]
+          },
+          {
+            "seed": 614228271,
+            "gap": 24,
+            "greedy_score": 16,
+            "lookahead_score": 40,
+            "random_mean": 1.8,
+            "payoff_conc": 1.0,
+            "skill_gain": 12.9,
+            "max_combo": 3,
+            "tags": [
+              "aha",
+              "fair_hard"
+            ]
+          },
+          {
+            "seed": 555554764,
+            "gap": 26,
+            "greedy_score": 12,
+            "lookahead_score": 38,
+            "random_mean": 2.5,
+            "payoff_conc": 0.89,
+            "skill_gain": 12.6,
+            "max_combo": 3,
+            "tags": [
+              "fair_hard"
+            ]
+          },
+          {
+            "seed": 580501651,
+            "gap": 0,
+            "greedy_score": 38,
+            "lookahead_score": 38,
+            "random_mean": 2.1,
+            "payoff_conc": 0.89,
+            "skill_gain": 10.8,
+            "max_combo": 3,
+            "tags": [
+              "fair_hard"
+            ]
+          },
+          {
+            "seed": 313136450,
+            "gap": 24,
+            "greedy_score": 14,
+            "lookahead_score": 38,
+            "random_mean": 2.8,
+            "payoff_conc": 0.89,
+            "skill_gain": 10.4,
+            "max_combo": 3,
+            "tags": [
+              "fair_hard"
+            ]
+          }
+        ],
+        "luck": [
+          {
+            "seed": 636501565,
+            "gap": 0,
+            "greedy_score": 12,
+            "lookahead_score": 12,
+            "random_mean": 10.2,
+            "payoff_conc": 0.33,
+            "skill_gain": 0.9,
+            "max_combo": 1,
+            "tags": [
+              "luck"
+            ]
+          },
+          {
+            "seed": 396631187,
+            "gap": 0,
+            "greedy_score": 24,
+            "lookahead_score": 24,
+            "random_mean": 16.2,
+            "payoff_conc": 0.83,
+            "skill_gain": 0.9,
+            "max_combo": 2,
+            "tags": [
+              "luck"
+            ]
+          },
+          {
+            "seed": 37366156,
+            "gap": 0,
+            "greedy_score": 24,
+            "lookahead_score": 24,
+            "random_mean": 11.6,
+            "payoff_conc": 0.83,
+            "skill_gain": 1.4,
+            "max_combo": 2,
+            "tags": [
+              "luck"
+            ]
+          },
+          {
+            "seed": 903382520,
+            "gap": 0,
+            "greedy_score": 20,
+            "lookahead_score": 20,
+            "random_mean": 8.4,
+            "payoff_conc": 1.0,
+            "skill_gain": 1.5,
+            "max_combo": 2,
+            "tags": [
+              "luck"
+            ]
+          },
+          {
+            "seed": 348373610,
+            "gap": 0,
+            "greedy_score": 28,
+            "lookahead_score": 28,
+            "random_mean": 10.6,
+            "payoff_conc": 0.71,
+            "skill_gain": 1.9,
+            "max_combo": 2,
+            "tags": [
+              "luck"
+            ]
+          },
+          {
+            "seed": 22826816,
+            "gap": 0,
+            "greedy_score": 12,
+            "lookahead_score": 12,
+            "random_mean": 5.3,
+            "payoff_conc": 0.83,
+            "skill_gain": 1.8,
+            "max_combo": 2,
+            "tags": [
+              "luck"
+            ]
+          },
+          {
+            "seed": 859930456,
+            "gap": 0,
+            "greedy_score": 22,
+            "lookahead_score": 22,
+            "random_mean": 5.2,
+            "payoff_conc": 0.91,
+            "skill_gain": 2.0,
+            "max_combo": 2,
+            "tags": [
+              "luck"
+            ]
+          },
+          {
+            "seed": 922057260,
+            "gap": 0,
+            "greedy_score": 22,
+            "lookahead_score": 22,
+            "random_mean": 8.2,
+            "payoff_conc": 0.82,
+            "skill_gain": 2.0,
+            "max_combo": 2,
+            "tags": [
+              "luck"
+            ]
+          },
+          {
+            "seed": 584648392,
+            "gap": 0,
+            "greedy_score": 10,
+            "lookahead_score": 10,
+            "random_mean": 2.1,
+            "payoff_conc": 1.0,
+            "skill_gain": 2.3,
+            "max_combo": 2,
+            "tags": [
+              "luck"
+            ]
+          },
+          {
+            "seed": 901088947,
+            "gap": 0,
+            "greedy_score": 20,
+            "lookahead_score": 20,
+            "random_mean": 5.2,
+            "payoff_conc": 1.0,
+            "skill_gain": 2.1,
+            "max_combo": 2,
+            "tags": [
+              "luck"
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "6b_3s",
+      "sphere_count": 6,
+      "level_count": 1000,
+      "meta": {
+        "shot_count": 3,
+        "target_score": 999,
+        "shot_speed": 25.0,
+        "level_range": [
+          0,
+          2
+        ],
+        "random_samples_per_level": 20,
+        "found_at": "2026-08-05"
+      },
+      "summary": {
+        "gap": {
+          "mean": 13.672,
+          "median": 12.0,
+          "min": -32.0,
+          "max": 76.0
+        },
+        "greedy_score": {
+          "mean": 41.882,
+          "median": 38.0,
+          "min": 14.0,
+          "max": 96.0
+        },
+        "lookahead_score": {
+          "mean": 55.554,
+          "median": 52.0,
+          "min": 22.0,
+          "max": 120.0
+        },
+        "random_mean": {
+          "mean": 9.2902,
+          "median": 8.6,
+          "min": 2.7,
+          "max": 32.4
+        },
+        "random_std": {
+          "mean": 6.462408650250405,
+          "median": 5.991658779532143,
+          "min": 2.1540659228538015,
+          "max": 17.369801380557004
+        },
+        "skill_gain": {
+          "mean": 7.906069040743281,
+          "median": 7.326245202341704,
+          "min": 1.8207329549252096,
+          "max": 30.825426137390615
+        },
+        "payoff_conc": {
+          "mean": 0.608703736667076,
+          "median": 0.7391304347826086,
+          "min": 0.0,
+          "max": 1.0
+        },
+        "max_combo": {
+          "mean": 2.983,
+          "median": 3.0,
+          "min": 2.0,
+          "max": 5.0
+        },
+        "spheres_removed": {
+          "mean": 0.408,
+          "median": 0.0,
+          "min": 0.0,
+          "max": 3.0
+        }
+      },
+      "histograms": {
+        "gap": {
+          "labels": [
+            "0-9",
+            "10-19",
+            "20-29",
+            "30-39",
+            "40-49",
+            "50-59",
+            "60-69",
+            "70-79"
+          ],
+          "counts": [
+            400,
+            289,
+            172,
+            77,
+            44,
+            13,
+            3,
+            2
+          ]
+        },
+        "scores": {
+          "labels": [
+            "0-14",
+            "15-29",
+            "30-44",
+            "45-59",
+            "60-74",
+            "75-89",
+            "90-104",
+            "105-119",
+            "120-134"
+          ],
+          "series": {
+            "random": [
+              916,
+              83,
+              1,
+              0,
+              0,
+              0,
+              0,
+              0,
+              0
+            ],
+            "greedy": [
+              1,
+              250,
+              400,
+              173,
+              143,
+              29,
+              4,
+              0,
+              0
+            ],
+            "lookahead": [
+              0,
+              19,
+              353,
+              269,
+              165,
+              148,
+              32,
+              13,
+              1
+            ]
+          }
+        },
+        "payoff_conc": {
+          "labels": [
+            "0.00-0.10",
+            "0.10-0.20",
+            "0.20-0.30",
+            "0.30-0.40",
+            "0.40-0.50",
+            "0.50-0.60",
+            "0.60-0.70",
+            "0.70-0.80",
+            "0.80-0.90",
+            "0.90-1.00"
+          ],
+          "counts": [
+            107,
+            97,
+            83,
+            34,
+            42,
+            45,
+            70,
+            82,
+            198,
+            242
+          ]
+        },
+        "skill_gain": {
+          "labels": [
+            "0-1",
+            "2-3",
+            "4-5",
+            "6-7",
+            "8-9",
+            "10-11",
+            "12-13",
+            "14-15",
+            "16-17",
+            "18-19",
+            "20-21",
+            "22-23",
+            "24-25",
+            "26-27",
+            "28-29",
+            "30-31"
+          ],
+          "counts": [
+            3,
+            81,
+            257,
+            232,
+            202,
+            113,
+            52,
+            30,
+            16,
+            8,
+            1,
+            3,
+            0,
+            0,
+            1,
+            1
+          ]
+        }
+      },
+      "archetypes": {
+        "aha": 86,
+        "spectacle": 4,
+        "fair_hard": 7,
+        "luck": 15,
+        "untagged": 892
+      },
+      "payoff_by_gap_quartile": {
+        "Q1": 0.45454545454545453,
+        "Q2": 0.7445652173913043,
+        "Q3": 0.770979020979021,
+        "Q4": 0.85
+      },
+      "highlights": {
+        "aha": [
+          {
+            "seed": 520846562,
+            "gap": 76,
+            "greedy_score": 24,
+            "lookahead_score": 100,
+            "random_mean": 6.2,
+            "payoff_conc": 1.0,
+            "skill_gain": 19.0,
+            "max_combo": 4,
+            "tags": [
+              "aha",
+              "fair_hard"
+            ]
+          },
+          {
+            "seed": 407200662,
+            "gap": 72,
+            "greedy_score": 36,
+            "lookahead_score": 108,
+            "random_mean": 16.4,
+            "payoff_conc": 1.0,
+            "skill_gain": 8.9,
+            "max_combo": 4,
+            "tags": [
+              "aha"
+            ]
+          },
+          {
+            "seed": 992865823,
+            "gap": 60,
+            "greedy_score": 34,
+            "lookahead_score": 94,
+            "random_mean": 10.2,
+            "payoff_conc": 0.96,
+            "skill_gain": 8.2,
+            "max_combo": 5,
+            "tags": [
+              "aha",
+              "spectacle"
+            ]
+          },
+          {
+            "seed": 864169634,
+            "gap": 58,
+            "greedy_score": 48,
+            "lookahead_score": 106,
+            "random_mean": 8.4,
+            "payoff_conc": 0.92,
+            "skill_gain": 19.4,
+            "max_combo": 4,
+            "tags": [
+              "aha"
+            ]
+          },
+          {
+            "seed": 587105858,
+            "gap": 52,
+            "greedy_score": 48,
+            "lookahead_score": 100,
+            "random_mean": 15.1,
+            "payoff_conc": 1.0,
+            "skill_gain": 13.5,
+            "max_combo": 4,
+            "tags": [
+              "aha"
+            ]
+          },
+          {
+            "seed": 899608239,
+            "gap": 52,
+            "greedy_score": 54,
+            "lookahead_score": 106,
+            "random_mean": 7.9,
+            "payoff_conc": 0.92,
+            "skill_gain": 22.1,
+            "max_combo": 4,
+            "tags": [
+              "aha"
+            ]
+          },
+          {
+            "seed": 816942409,
+            "gap": 48,
+            "greedy_score": 30,
+            "lookahead_score": 78,
+            "random_mean": 8.2,
+            "payoff_conc": 0.97,
+            "skill_gain": 13.5,
+            "max_combo": 4,
+            "tags": [
+              "aha"
+            ]
+          },
+          {
+            "seed": 566496806,
+            "gap": 48,
+            "greedy_score": 68,
+            "lookahead_score": 116,
+            "random_mean": 18.6,
+            "payoff_conc": 0.93,
+            "skill_gain": 6.7,
+            "max_combo": 4,
+            "tags": [
+              "aha"
+            ]
+          },
+          {
+            "seed": 60838490,
+            "gap": 48,
+            "greedy_score": 68,
+            "lookahead_score": 116,
+            "random_mean": 15.8,
+            "payoff_conc": 0.93,
+            "skill_gain": 22.4,
+            "max_combo": 4,
+            "tags": [
+              "aha"
+            ]
+          },
+          {
+            "seed": 206924367,
+            "gap": 44,
+            "greedy_score": 64,
+            "lookahead_score": 108,
+            "random_mean": 9.2,
+            "payoff_conc": 0.93,
+            "skill_gain": 12.7,
+            "max_combo": 4,
+            "tags": [
+              "aha"
+            ]
+          }
+        ],
+        "spectacle": [
+          {
+            "seed": 992865823,
+            "gap": 60,
+            "greedy_score": 34,
+            "lookahead_score": 94,
+            "random_mean": 10.2,
+            "payoff_conc": 0.96,
+            "skill_gain": 8.2,
+            "max_combo": 5,
+            "tags": [
+              "aha",
+              "spectacle"
+            ]
+          },
+          {
+            "seed": 11379575,
+            "gap": 42,
+            "greedy_score": 50,
+            "lookahead_score": 92,
+            "random_mean": 8.7,
+            "payoff_conc": 1.0,
+            "skill_gain": 10.4,
+            "max_combo": 5,
+            "tags": [
+              "aha",
+              "spectacle"
+            ]
+          },
+          {
+            "seed": 932627329,
+            "gap": 40,
+            "greedy_score": 52,
+            "lookahead_score": 92,
+            "random_mean": 7.2,
+            "payoff_conc": 0.96,
+            "skill_gain": 14.4,
+            "max_combo": 5,
+            "tags": [
+              "aha",
+              "spectacle"
+            ]
+          },
+          {
+            "seed": 825147911,
+            "gap": 16,
+            "greedy_score": 72,
+            "lookahead_score": 88,
+            "random_mean": 11.8,
+            "payoff_conc": 1.0,
+            "skill_gain": 8.9,
+            "max_combo": 5,
+            "tags": [
+              "spectacle"
+            ]
+          }
+        ],
+        "fair_hard": [
+          {
+            "seed": 745442201,
+            "gap": 16,
+            "greedy_score": 62,
+            "lookahead_score": 78,
+            "random_mean": 3.9,
+            "payoff_conc": 0.77,
+            "skill_gain": 19.1,
+            "max_combo": 3,
+            "tags": [
+              "fair_hard"
+            ]
+          },
+          {
+            "seed": 520846562,
+            "gap": 76,
+            "greedy_score": 24,
+            "lookahead_score": 100,
+            "random_mean": 6.2,
+            "payoff_conc": 1.0,
+            "skill_gain": 19.0,
+            "max_combo": 4,
+            "tags": [
+              "aha",
+              "fair_hard"
+            ]
+          },
+          {
+            "seed": 161576599,
+            "gap": 24,
+            "greedy_score": 50,
+            "lookahead_score": 74,
+            "random_mean": 6.5,
+            "payoff_conc": 0.89,
+            "skill_gain": 18.1,
+            "max_combo": 3,
+            "tags": [
+              "fair_hard"
+            ]
+          },
+          {
+            "seed": 184201437,
+            "gap": 26,
+            "greedy_score": 50,
+            "lookahead_score": 76,
+            "random_mean": 5.8,
+            "payoff_conc": 0.89,
+            "skill_gain": 16.2,
+            "max_combo": 3,
+            "tags": [
+              "fair_hard"
+            ]
+          },
+          {
+            "seed": 714780833,
+            "gap": 28,
+            "greedy_score": 44,
+            "lookahead_score": 72,
+            "random_mean": 6.1,
+            "payoff_conc": 0.56,
+            "skill_gain": 13.7,
+            "max_combo": 3,
+            "tags": [
+              "fair_hard"
+            ]
+          },
+          {
+            "seed": 72182375,
+            "gap": 20,
+            "greedy_score": 54,
+            "lookahead_score": 74,
+            "random_mean": 6.3,
+            "payoff_conc": 0.03,
+            "skill_gain": 11.8,
+            "max_combo": 3,
+            "tags": [
+              "fair_hard"
+            ]
+          },
+          {
+            "seed": 358608407,
+            "gap": 50,
+            "greedy_score": 26,
+            "lookahead_score": 76,
+            "random_mean": 6.5,
+            "payoff_conc": 0.58,
+            "skill_gain": 11.7,
+            "max_combo": 3,
+            "tags": [
+              "fair_hard"
+            ]
+          }
+        ],
+        "luck": [
+          {
+            "seed": 432646439,
+            "gap": -8,
+            "greedy_score": 56,
+            "lookahead_score": 48,
+            "random_mean": 16.2,
+            "payoff_conc": 0.08,
+            "skill_gain": 2.4,
+            "max_combo": 3,
+            "tags": [
+              "luck"
+            ]
+          },
+          {
+            "seed": 302148244,
+            "gap": 0,
+            "greedy_score": 44,
+            "lookahead_score": 44,
+            "random_mean": 19.4,
+            "payoff_conc": 0.45,
+            "skill_gain": 2.0,
+            "max_combo": 2,
+            "tags": [
+              "luck"
+            ]
+          },
+          {
+            "seed": 313293720,
+            "gap": -6,
+            "greedy_score": 58,
+            "lookahead_score": 52,
+            "random_mean": 11.3,
+            "payoff_conc": 0.77,
+            "skill_gain": 3.1,
+            "max_combo": 2,
+            "tags": [
+              "luck"
+            ]
+          },
+          {
+            "seed": 673925469,
+            "gap": 0,
+            "greedy_score": 32,
+            "lookahead_score": 32,
+            "random_mean": 14.4,
+            "payoff_conc": 0.25,
+            "skill_gain": 1.8,
+            "max_combo": 2,
+            "tags": [
+              "luck"
+            ]
+          },
+          {
+            "seed": 19060920,
+            "gap": 0,
+            "greedy_score": 48,
+            "lookahead_score": 48,
+            "random_mean": 13.6,
+            "payoff_conc": 0.83,
+            "skill_gain": 3.6,
+            "max_combo": 2,
+            "tags": [
+              "luck"
+            ]
+          },
+          {
+            "seed": 558026320,
+            "gap": 0,
+            "greedy_score": 50,
+            "lookahead_score": 50,
+            "random_mean": 21.9,
+            "payoff_conc": 0.04,
+            "skill_gain": 2.0,
+            "max_combo": 2,
+            "tags": [
+              "luck"
+            ]
+          },
+          {
+            "seed": 252370275,
+            "gap": 0,
+            "greedy_score": 56,
+            "lookahead_score": 56,
+            "random_mean": 13.6,
+            "payoff_conc": 0.04,
+            "skill_gain": 3.3,
+            "max_combo": 3,
+            "tags": [
+              "luck"
+            ]
+          },
+          {
+            "seed": 756242405,
+            "gap": 0,
+            "greedy_score": 28,
+            "lookahead_score": 28,
+            "random_mean": 10,
+            "payoff_conc": 0.71,
+            "skill_gain": 2.8,
+            "max_combo": 2,
+            "tags": [
+              "luck"
+            ]
+          },
+          {
+            "seed": 311072113,
+            "gap": 0,
+            "greedy_score": 42,
+            "lookahead_score": 42,
+            "random_mean": 13.5,
+            "payoff_conc": 0.1,
+            "skill_gain": 2.3,
+            "max_combo": 3,
+            "tags": [
+              "luck"
+            ]
+          },
+          {
+            "seed": 764569313,
+            "gap": 0,
+            "greedy_score": 38,
+            "lookahead_score": 38,
+            "random_mean": 14.8,
+            "payoff_conc": 0.47,
+            "skill_gain": 2.6,
+            "max_combo": 2,
+            "tags": [
+              "luck"
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}
