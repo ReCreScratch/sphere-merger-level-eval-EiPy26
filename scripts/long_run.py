@@ -74,6 +74,7 @@ import random
 import signal
 import sys
 import time
+from collections import Counter
 from concurrent.futures import BrokenExecutor, Future, ProcessPoolExecutor, wait
 from datetime import date, datetime
 from pathlib import Path
@@ -93,7 +94,12 @@ from sphere_merger.agents.runner import (
 )
 from sphere_merger.game.checkpoint import Checkpoint
 from sphere_merger.game.interesting_levels import RUNS, RunConfig, select_runs
-from sphere_merger.game.level import LevelDefinition, generate_random_level
+from sphere_merger.game.level import (
+    LevelDefinition,
+    generate_full_mergeable_level,
+    generate_random_level,
+    merge_popcount,
+)
 from sphere_merger.physics.boundary import Boundary
 from sphere_merger.physics.engine import native_backend
 from sphere_merger.physics.vector import Vector2
@@ -114,16 +120,22 @@ shorter rounds deliberately: they are the cheapest levels *and* the
 baseline the longer ones are read against, so they should be the least
 noisy of the three."""
 
+
 DATA_DIR = Path(__file__).resolve().parents[1] / "data"
 STOP_FILE = DATA_DIR / "STOP"
 LOG_PATH = DATA_DIR / "long_run.log"
+STATUS_PATH = DATA_DIR / "long_run_status.html"
+PROGRESS_INTERVAL = 5.0
 
 ES_CONTINUOUS = 0x80000000
 ES_SYSTEM_REQUIRED = 0x00000001
 
 LONG_RUN_GRID = tuple(
-    run for run in RUNS if run.sphere_count in SPHERE_COUNTS and run.shot_count in SHOT_SPLIT
+    run
+    for run in RUNS
+    if not run.full_mergeable and run.sphere_count in SPHERE_COUNTS and run.shot_count in SHOT_SPLIT
 )
+FULL_MERGE_GRID = tuple(run for run in RUNS if run.full_mergeable)
 
 _stop_requested = False
 
@@ -148,6 +160,48 @@ def log(message: str) -> None:
         handle.write(stamped + "\n")
 
 
+def write_status(
+    round_index: int,
+    played: dict[str, int],
+    round_totals: dict[str, int],
+    done: dict[str, int],
+    started: float,
+    finished: bool = False,
+) -> None:
+    """Overwrite the small local status page at `STATUS_PATH`.
+
+    An operator opens this once in a browser; it self-refreshes and needs
+    no further attention, which is the point -- unlike `log`, this is not
+    meant to be watched live in a chat or terminal, just glanced at.
+    """
+    rows = "\n".join(
+        f"<tr><td>{name}</td><td>{played.get(name, 0)}/{total}</td>"
+        f"<td>{done.get(name, 0)}</td></tr>"
+        for name, total in round_totals.items()
+    )
+    refresh = "" if finished else '<meta http-equiv="refresh" content="3">'
+    status_line = "beendet" if finished else f"Runde {round_index} läuft"
+    elapsed_h = (time.perf_counter() - started) / 3600
+    html = f"""<!doctype html>
+<meta charset="utf-8">
+{refresh}
+<title>long_run.py -- Fortschritt</title>
+<style>
+body {{ font-family: system-ui, sans-serif; margin: 2rem; color: #222; }}
+table {{ border-collapse: collapse; margin-top: 1rem; }}
+td, th {{ padding: 0.3rem 0.9rem; border-bottom: 1px solid #ccc; text-align: right; }}
+th:first-child, td:first-child {{ text-align: left; }}
+</style>
+<h1>long_run.py</h1>
+<p>{status_line}, {elapsed_h:.2f} h gelaufen -- Stand {datetime.now():%H:%M:%S}</p>
+<table>
+<tr><th>Regime</th><th>diese Runde</th><th>gesamt</th></tr>
+{rows}
+</table>
+"""
+    STATUS_PATH.write_text(html, encoding="utf-8")
+
+
 def keep_awake(enable: bool) -> None:
     """Ask Windows not to sleep while the run is going (no-op elsewhere).
 
@@ -166,15 +220,44 @@ MAX_WORKERS = os.cpu_count() or 4
 in-flight level tasks (see `run_workload`) -- one task per worker keeps
 every worker continuously busy without overprovisioning the queue."""
 
+FULL_MERGE_SPLIT = {
+    "4b_2s_fm": 0.50,
+    "3b_3s_fm": 0.20,
+    "2b_4s_fm": 0.10,
+    "3b_5s_fm": 0.20,
+}
+"""Share of the full-mergeable regimes' round per regime, keyed by name
+rather than shot count -- unlike the nine-regime grid these four don't
+share a sphere count, so there is no `SPHERE_COUNTS`-style grouping to
+split a shot count's share within."""
+
+FULL_MERGE_LEVELS = round(MAX_WORKERS / min(FULL_MERGE_SPLIT.values()))
+"""Round size for the full-mergeable regimes (see
+`docs/full_merge_experiment.md`) -- calibration-sized, not the 9-regime
+experiment's 300. Chosen so every regime's share of the round
+(`FULL_MERGE_SPLIT` applied to this) is a whole multiple of `MAX_WORKERS`:
+a first calibration run at a plain 100 measured real per-level cost
+scaling 2.4-10.8s with shot count, and a round that small left the
+cheapest/most numerous regime finishing its queue share well before the
+priciest one, idling workers for the rest of the round instead of
+refilling them -- exactly the barrier effect this script's per-level-task
+design (see module docstring) exists to avoid. Scaling the round up so
+even the smallest share (`min(FULL_MERGE_SPLIT.values())`) is a full
+worker-count multiple keeps that tail's relative cost small without
+touching the percentages themselves."""
+
 
 def round_size(run: RunConfig) -> int:
     """How many levels of `run` one round plays."""
+    if run.full_mergeable:
+        return max(1, round(FULL_MERGE_LEVELS * FULL_MERGE_SPLIT[run.name]))
     return max(1, round(LEVELS_PER_SPHERE_COUNT * SHOT_SPLIT[run.shot_count]))
 
 
 def build_level(seed: int, run: RunConfig) -> LevelDefinition:
     """The level `seed` denotes under `run`'s parameters."""
-    return generate_random_level(
+    generator = generate_full_mergeable_level if run.full_mergeable else generate_random_level
+    return generator(
         seed=seed,
         boundary=FIELD,
         spawn_position=SPAWN,
@@ -202,6 +285,7 @@ def meta_for(run: RunConfig) -> dict[str, object]:
         "level_range": list(LEVEL_RANGE),
         "shot_speed": SHOT_SPEED,
         "random_sample_count": RANDOM_SAMPLE_COUNT,
+        "full_mergeable": run.full_mergeable,
         "found_at": date.today().isoformat(),
     }
 
@@ -221,14 +305,17 @@ def _states(records: list[ShotRecord]) -> list[list[list[float]]]:
 
 def level_record(
     seed: int,
+    level: LevelDefinition,
     random_scores: list[int],
     random_first: list[ShotRecord],
     greedy: list[ShotRecord],
     lookahead: list[ShotRecord],
 ) -> dict[str, object]:
     """One level as it is stored -- see docs/data_schema.md."""
+    all_levels = [sphere.level for sphere in level.initial_spheres] + level.shot_queue
     return {
         "seed": seed,
+        "merge_popcount": merge_popcount(all_levels),
         "random_scores": random_scores,
         "random0_shots": shots_of(random_first),
         "random0_states": _states(random_first),
@@ -352,7 +439,7 @@ def play_level_task(seed: int, run: RunConfig) -> tuple[dict[str, object], dict[
     lookahead = record_playthrough(level, lookahead_agent)
 
     return (
-        level_record(seed, random_scores, random_first, greedy, lookahead),
+        level_record(seed, level, random_scores, random_first, greedy, lookahead),
         shrink_record(seed, level, greedy_agent, lookahead),
     )
 
@@ -365,6 +452,8 @@ def run_workload(
     used: dict[str, set[int]],
     done: dict[str, int],
     rng: random.Random,
+    round_index: int,
+    started: float,
 ) -> dict[str, int]:
     """Play one level per entry in `items` (already one entry per desired
     level, e.g. a regime repeated `round_size` times), through a rolling
@@ -382,11 +471,17 @@ def run_workload(
     tracked for exact retry, which would need undoing its `used` entry
     only to redo it identically a moment later.
 
+    Refreshes the local status page (`write_status`) at most once per
+    `PROGRESS_INTERVAL` seconds -- an operator can glance at it, unlike a
+    chat/terminal log this deliberately does not push anything anywhere.
+
     Returns how many levels of each regime were completed.
     """
+    total_by_name = Counter(run.name for run in items)
     played: dict[str, int] = {}
     pending: dict[Future[tuple[dict[str, object], dict[str, object]]], RunConfig] = {}
     queue = list(items)
+    last_progress = time.perf_counter()
 
     def submit_one() -> bool:
         if not queue or should_stop():
@@ -427,6 +522,11 @@ def run_workload(
 
         while len(pending) < MAX_WORKERS and submit_one():
             pass
+
+        now = time.perf_counter()
+        if pending and now - last_progress >= PROGRESS_INTERVAL:
+            write_status(round_index, played, dict(total_by_name), done, started)
+            last_progress = now
 
     return played
 
@@ -473,13 +573,17 @@ def main(runs: tuple[RunConfig, ...], resume: bool = False) -> None:
             for run in runs:
                 round_items.extend([run] * round_size(run))
             rng.shuffle(round_items)
+            round_totals = Counter(run.name for run in round_items)
 
-            played = run_workload(round_items, pool, batch, shrunk, used, done, rng)
+            played = run_workload(
+                round_items, pool, batch, shrunk, used, done, rng, round_index, started
+            )
             for run in runs:
                 log(
                     f"  Runde {round_index} {run.name}: "
                     f"+{played.get(run.name, 0)} (gesamt {done[run.name]})"
                 )
+            write_status(round_index, played, dict(round_totals), done, started)
 
             elapsed = time.perf_counter() - round_started
             total = sum(done.values())
@@ -497,6 +601,9 @@ def main(runs: tuple[RunConfig, ...], resume: bool = False) -> None:
             shrinks = shrunk[run.name].finalize(run.shrunk_path)
             log(f"  {run.name}: {levels} Level -> {run.interesting_path.name} ({shrinks} Shrink)")
         log(f"Fertig. {sum(done.values())} Level in {(time.perf_counter() - started) / 3600:.2f} h")
+        write_status(
+            round_index, {}, {r.name: done[r.name] for r in runs}, done, started, finished=True
+        )
 
 
 if __name__ == "__main__":

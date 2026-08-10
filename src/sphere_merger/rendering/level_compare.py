@@ -9,6 +9,12 @@ Reuses `game.round.ShotReplay` for playback and `rendering.renderer`'s
 viewport/drawing primitives -- same building blocks as
 `rendering.agent_grid`'s fixed grid, plus a clickable sidebar list for
 picking which level's four panels are showing.
+
+Each panel outlines the sphere just shot (white ring, via
+`ShotReplay.current_shot`) and the next one on deck at the spawn point
+(gold ring, `renderer.next_ball_preview` -- same convention the
+interactive game uses), and its HUD lists the rest of the shot queue --
+useful for reading a multi-shot plan at a glance, not just the outcome.
 """
 
 from __future__ import annotations
@@ -20,8 +26,10 @@ import pygame
 from sphere_merger.game.level import LevelDefinition
 from sphere_merger.game.round import DT, ShotReplay
 from sphere_merger.rendering.renderer import (
+    ACTIVE_SHOT_OUTLINE_COLOR,
     FIELD_OUTLINE_COLOR,
     LOSE_COLOR,
+    NEXT_BALL_OUTLINE_COLOR,
     WIN_COLOR,
     RenderConfig,
     Viewport,
@@ -29,6 +37,8 @@ from sphere_merger.rendering.renderer import (
     draw_button,
     draw_sphere,
     field_rect,
+    next_ball_preview,
+    world_to_screen,
 )
 
 SIDEBAR_WIDTH = 300
@@ -133,6 +143,14 @@ def _draw_cell_hud(
         f"Score: {cell.state.score} / {cell.level.target_score}", True, LABEL_COLOR
     )
     screen.blit(score_text, (outline.x + 2, outline.bottom - 20))
+
+    if cell.state.remaining_queue:
+        queue_text = font.render(
+            "Warteschlange: " + ", ".join(str(level) for level in cell.state.remaining_queue),
+            True,
+            LABEL_COLOR,
+        )
+        screen.blit(queue_text, queue_text.get_rect(topright=(outline.right - 2, outline.y + 2)))
 
     if cell.state.is_over:
         message, color = ("GEWONNEN", WIN_COLOR) if cell.state.is_won else ("VERLOREN", LOSE_COLOR)
@@ -371,6 +389,29 @@ def run_level_compare(
             pygame.draw.rect(screen, FIELD_OUTLINE_COLOR, cell.outline, 1)
             for sphere in cell.state.spheres:
                 draw_sphere(screen, font, sphere, cell.level.boundary, cell.viewport, render_config)
+                if sphere is cell.current_shot:
+                    center = world_to_screen(
+                        sphere.position.x, sphere.position.y, cell.level.boundary, cell.viewport
+                    )
+                    radius_px = max(int(sphere.radius * cell.viewport.scale), 2)
+                    pygame.draw.circle(screen, ACTIVE_SHOT_OUTLINE_COLOR, center, radius_px, 3)
+
+            preview_sphere = next_ball_preview(cell.level, cell.state)
+            if preview_sphere is not None and not cell.state.is_over:
+                draw_sphere(
+                    screen, font, preview_sphere, cell.level.boundary, cell.viewport, render_config
+                )
+                preview_center = world_to_screen(
+                    preview_sphere.position.x,
+                    preview_sphere.position.y,
+                    cell.level.boundary,
+                    cell.viewport,
+                )
+                preview_radius_px = max(int(preview_sphere.radius * cell.viewport.scale), 2)
+                pygame.draw.circle(
+                    screen, NEXT_BALL_OUTLINE_COLOR, preview_center, preview_radius_px, 3
+                )
+
             _draw_cell_hud(screen, font, cell, cell.outline)
 
         draw_button(screen, font, reset_button, "Reset", reset_button.collidepoint(mouse_pos))

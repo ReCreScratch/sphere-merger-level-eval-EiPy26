@@ -41,11 +41,19 @@ class RunConfig:
     runs below predate the shot count being variable and are pinned to
     their original `<n>b` names -- renaming their files would have bought
     nothing but a diff.
+
+    `full_mergeable` switches `long_run.py`'s generator from
+    `generate_random_level` to `generate_full_mergeable_level` (see
+    `docs/full_merge_experiment.md`) -- every sphere the level will ever
+    show, start plus shot queue, is then guaranteed constructible down to
+    one single sphere, `merge_popcount == 1` by construction rather than by
+    chance.
     """
 
     sphere_count: int
     shot_count: int
     slug: str | None = None
+    full_mergeable: bool = False
 
     @property
     def name(self) -> str:
@@ -80,6 +88,10 @@ RUNS: tuple[RunConfig, ...] = (
     RunConfig(sphere_count=5, shot_count=4),
     RunConfig(sphere_count=8, shot_count=4),
     RunConfig(sphere_count=10, shot_count=4),
+    RunConfig(sphere_count=4, shot_count=2, slug="4b_2s_fm", full_mergeable=True),
+    RunConfig(sphere_count=3, shot_count=3, slug="3b_3s_fm", full_mergeable=True),
+    RunConfig(sphere_count=2, shot_count=4, slug="2b_4s_fm", full_mergeable=True),
+    RunConfig(sphere_count=3, shot_count=5, slug="3b_5s_fm", full_mergeable=True),
 )
 
 

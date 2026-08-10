@@ -30,7 +30,7 @@ from dataclasses import replace
 from typing import Any
 
 from sphere_merger.game.interesting_levels import RUNS, RunConfig, load_run, select_runs
-from sphere_merger.game.level import generate_random_level
+from sphere_merger.game.level import generate_full_mergeable_level, generate_random_level
 from sphere_merger.metrics.archetypes import Archetype, tag_batch
 from sphere_merger.metrics.level_metrics import LevelMetrics
 from sphere_merger.physics.boundary import Boundary
@@ -189,7 +189,10 @@ def _build_entry(record: dict[str, Any], meta: dict[str, Any], reason: str) -> C
     spawn_position = Vector2(
         boundary.x_min + meta["spawn_margin"], boundary.y_min + meta["spawn_margin"]
     )
-    original_level = generate_random_level(
+    generator = (
+        generate_full_mergeable_level if meta.get("full_mergeable") else generate_random_level
+    )
+    original_level = generator(
         seed=record["seed"],
         boundary=boundary,
         spawn_position=spawn_position,

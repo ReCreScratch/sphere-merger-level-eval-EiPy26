@@ -263,6 +263,7 @@ class ShotReplay:
     state: RoundState = field(init=False)
     shot_index: int = field(init=False, default=0)
     combo_index: int = field(init=False, default=0)
+    current_shot: Sphere | None = field(init=False, default=None)
 
     def __post_init__(self) -> None:
         self.state = start_round(self.level)
@@ -271,16 +272,27 @@ class ShotReplay:
         self.state = start_round(self.level)
         self.shot_index = 0
         self.combo_index = 0
+        self.current_shot = None
 
     @property
     def settled(self) -> bool:
         return is_settled(self.state.spheres)
 
     def spawn_next_shot(self) -> None:
-        """Spawn the next recorded shot, if the round isn't over and any are left."""
+        """Spawn the next recorded shot, if the round isn't over and any are left.
+
+        Remembers the spawned sphere as `current_shot` -- a caller that
+        wants to highlight "the sphere just shot" checks it by identity
+        (`is`) against `state.spheres`, since a merge replaces rather than
+        mutates a sphere (see `game.merge.resolve_merges`): once this one
+        merges into something else, the identity check stops matching and
+        the highlight naturally disappears instead of following the merge
+        result around.
+        """
         if not self.state.is_over and self.shot_index < len(self.shots):
             angle, speed = self.shots[self.shot_index]
             spawn_shot(self.state, angle, speed)
+            self.current_shot = self.state.spheres[-1]
             self.shot_index += 1
             self.combo_index = 0
 

@@ -5,7 +5,7 @@
 (Feld hinzugefügt/entfernt/umbenannt), dieses Dokument im selben Commit
 nachziehen -- nicht aus dem Gedächtnis, sondern durch erneutes Lesen des
 tatsächlichen `save_run(meta=..., levels=[...])`-Aufrufs im Code. Stand:
-2026-08-05, verifiziert gegen den Code zu diesem Zeitpunkt.
+2026-08-06, verifiziert gegen den Code zu diesem Zeitpunkt.
 
 Beide Dateifamilien nutzen `game/interesting_levels.py`s generisches
 `{"meta": ..., "levels": [...]}`-Format: `meta` einmal pro Datei (geteilte
@@ -34,6 +34,20 @@ letzten Lauf zu überschreiben.
 | `5b_4s` | 5 | 4 | 2100 |
 | `8b_4s` | 8 | 4 | 2100 |
 | `10b_4s` | 10 | 4 | 2100 |
+| `4b_2s_fm` | 4 | 2 | - |
+| `3b_3s_fm` | 3 | 3 | - |
+| `2b_4s_fm` | 2 | 4 | - |
+| `3b_5s_fm` | 3 | 5 | - |
+
+Die vier `*_fm`-Regime (`full_mergeable=True`, siehe
+`docs/full_merge_experiment.md`) nutzen `generate_full_mergeable_level`
+statt `generate_random_level` -- `merge_popcount` ist dort immer `1` by
+construction, nicht wie bei den übrigen Regimen nur zufällig manchmal.
+Gemessen wird hier, wie oft der Agent den garantiert möglichen
+Komplett-Merge tatsächlich schafft. 4-/5-Schuss-Regime darunter (`3b_3s_fm`,
+`2b_4s_fm`, `3b_5s_fm`): `LookaheadAgent`s 2-Ply-Suche ist dort nicht
+nachweislich nah-optimal (siehe unten) -- die gemessene Quote ist eine
+Untergrenze, keine echte Erreichbarkeits-Quote.
 
 Die Level-Zahlen von `8b`/`5b`/`10b_2s`/`5b_3s`/`8b_3s`/`10b_3s`/`5b_4s`/
 `8b_4s`/`10b_4s` stammen aus einem `scripts/long_run.py`-Lauf
@@ -70,12 +84,14 @@ Ergebnisse der anderen Regimes.
 | `shot_speed` | float | feste Schussgeschwindigkeit aller Agenten |
 | `found_at` | str | ISO-Datum des Laufs |
 | `seeds` | list[int] | alle `LEVEL_COUNT` Level-Seeds dieses Laufs, per `random.sample` gezogen -- Basis für späteren Abgleich/Reproduktion |
+| `full_mergeable` | bool | `RunConfig.full_mergeable` -- ob dieses Regime mit `generate_full_mergeable_level` statt `generate_random_level` erzeugt wurde (nur `long_run.py`-Läufe, siehe unten) |
 
 ### `levels[]` (ein Eintrag pro Level)
 
 | Feld | Typ | Bedeutung |
 |---|---|---|
 | `seed` | int | Level-Seed (siehe `meta.seeds`) |
+| `merge_popcount` | int | `merge_popcount(initial_spheres + shot_queue)` -- kleinstmögliche Kugelzahl am Ende, egal wie gespielt wird (`1` = vollständiger Merge zu einer Kugel ist grundsätzlich möglich). Bei `full_mergeable`-Regimen immer `1`, bei den übrigen nur zufällig |
 | `random_scores` | list[int] | `RANDOM_SAMPLE_COUNT` (=20) unabhängige Random-Playthroughs, je eigener `RandomAgent(seed=seed*20+i)` -- Rohwerte, nicht nur Mittelwert, damit Mittelwert/Std/Min/Max später ohne Neu-Simulation berechenbar sind |
 | `greedy_score` | int | finaler Score des Greedy-Playthroughs |
 | `greedy_shots` | list[[angle, speed]] | Greedys Schüsse, zum Replay |

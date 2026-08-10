@@ -45,6 +45,7 @@ HUD_TEXT_COLOR = (230, 230, 230)
 WIN_COLOR = (90, 200, 120)
 LOSE_COLOR = (220, 80, 80)
 NEXT_BALL_OUTLINE_COLOR = (255, 215, 0)
+ACTIVE_SHOT_OUTLINE_COLOR = (255, 255, 255)
 SLIDER_TRACK_COLOR = (70, 70, 90)
 SLIDER_HANDLE_COLOR = (220, 220, 235)
 FIELD_MARGIN_PX = 40
@@ -95,7 +96,7 @@ def compute_viewport(
     return Viewport(scale, area_offset[0] + margin_x, area_offset[1] + area_size[1] - margin_y)
 
 
-def _world_to_screen(x: float, y: float, boundary: Boundary, viewport: Viewport) -> tuple[int, int]:
+def world_to_screen(x: float, y: float, boundary: Boundary, viewport: Viewport) -> tuple[int, int]:
     screen_x = viewport.origin_x + (x - boundary.x_min) * viewport.scale
     screen_y = viewport.origin_y_bottom - (y - boundary.y_min) * viewport.scale
     return int(screen_x), int(screen_y)
@@ -117,7 +118,7 @@ def sphere_at_screen_pos(
 ) -> Sphere | None:
     """Topmost (last-drawn) sphere whose circle contains `pos`, if any."""
     for sphere in reversed(spheres):
-        center_x, center_y = _world_to_screen(
+        center_x, center_y = world_to_screen(
             sphere.position.x, sphere.position.y, boundary, viewport
         )
         radius_px = max(int(sphere.radius * viewport.scale), 2)
@@ -218,7 +219,7 @@ def draw_sphere(
     viewport: Viewport,
     config: RenderConfig,
 ) -> None:
-    center = _world_to_screen(sphere.position.x, sphere.position.y, boundary, viewport)
+    center = world_to_screen(sphere.position.x, sphere.position.y, boundary, viewport)
     radius_px = max(int(sphere.radius * viewport.scale), 2)
     color = LEVEL_COLORS[sphere.level % len(LEVEL_COLORS)]
     pygame.draw.circle(screen, color, center, radius_px)
@@ -301,7 +302,7 @@ def run(
             draw_sphere(screen, font, sphere, boundary, viewport, render_config)
 
         if drag_sphere is not None:
-            start_center = _world_to_screen(
+            start_center = world_to_screen(
                 drag_sphere.position.x, drag_sphere.position.y, boundary, viewport
             )
             shot_dx = (drag_start[0] - mouse_pos[0]) / viewport.scale
@@ -374,7 +375,7 @@ def _draw_round_hud(
         screen.blit(banner, banner.get_rect(center=(screen.get_width() // 2, 40)))
 
 
-def _next_ball_preview(level: LevelDefinition, state: RoundState) -> Sphere | None:
+def next_ball_preview(level: LevelDefinition, state: RoundState) -> Sphere | None:
     """The next queued sphere, sitting at the spawn point, or `None` if the
     queue is empty. Used both to show it "on deck" and to aim the shot."""
     if not state.remaining_queue:
@@ -516,10 +517,10 @@ def run_round(
         for sphere in state.spheres:
             draw_sphere(screen, font, sphere, level.boundary, viewport, render_config)
 
-        preview_sphere = _next_ball_preview(level, state)
+        preview_sphere = next_ball_preview(level, state)
         if preview_sphere is not None and not state.is_over:
             draw_sphere(screen, font, preview_sphere, level.boundary, viewport, render_config)
-            preview_center = _world_to_screen(
+            preview_center = world_to_screen(
                 preview_sphere.position.x, preview_sphere.position.y, level.boundary, viewport
             )
             preview_radius_px = max(int(preview_sphere.radius * viewport.scale), 2)
@@ -546,7 +547,7 @@ def run_round(
                 line_length_px = MIN_AIM_LINE_PX + speed_fraction * (
                     MAX_AIM_LINE_PX - MIN_AIM_LINE_PX
                 )
-                start_center = _world_to_screen(
+                start_center = world_to_screen(
                     preview_sphere.position.x, preview_sphere.position.y, level.boundary, viewport
                 )
                 direction_x, direction_y = shot_dx / drag_length, shot_dy / drag_length
