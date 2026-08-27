@@ -1,10 +1,9 @@
-"""Merge logic: same-level spheres touching combine into one sphere at the
-next level, instead of bouncing off each other.
+"""Merge logic: touching same-level spheres combine into one sphere at the
+next level instead of bouncing off each other.
 
-Meant to run right after a `physics.engine.step()` call made with
-`collision_filter=lambda a, b: a.level != b.level` (see `engine.step`'s
-docstring) -- that leaves same-level overlapping pairs untouched by the
-physics solver so `resolve_merges` can take them over here.
+Runs right after a `physics.engine.step()` called with
+`collision_filter=lambda a, b: a.level != b.level`, which leaves
+same-level overlapping pairs alone for `resolve_merges` to take over.
 """
 
 from __future__ import annotations
@@ -17,13 +16,11 @@ from sphere_merger.physics.sphere import Sphere
 def merge_spheres(a: Sphere, b: Sphere) -> Sphere:
     """Combine two same-level spheres into one sphere at `level + 1`.
 
-    Position and velocity are the plain average of `a` and `b` -- no mass
-    concept (see `Sphere`'s docstring), so this is momentum-conserving
-    under the implicit assumption that every sphere counts equally. The
-    merged sphere keeps flying with the combined "Restgeschwindigkeit"
-    instead of snapping to a stop. Radius comes from `radius_for_level`
-    (uniform, see its docstring), so merged spheres stay the same size as
-    everything else instead of visibly growing with every merge.
+    Position and velocity are the plain average of `a` and `b`, which
+    conserves momentum given that every sphere counts equally (no mass,
+    see `Sphere`). The merged sphere keeps flying with that combined
+    velocity rather than snapping to a stop, and takes its radius from
+    `radius_for_level`, so it does not visibly grow.
 
     >>> from sphere_merger.physics.vector import Vector2
     >>> a = Sphere(Vector2(0.0, 0.0), Vector2(1.0, 0.0), radius=0.5, level=0)
@@ -45,22 +42,16 @@ def merge_spheres(a: Sphere, b: Sphere) -> Sphere:
 def resolve_merges(spheres: list[Sphere]) -> list[int]:
     """Merge every same-level overlapping pair in `spheres`, in place.
 
-    Pairs are found via the same fixed index order as
-    `physics.collision.find_colliding_pairs` (lowest indices first), so
-    results are deterministic regardless of how spheres came to overlap. A
-    sphere already merged this call is skipped for any further pairing
-    within the same call -- it may still merge again on a later call, once
-    it has had a chance to newly collide with something.
+    Returns the resulting level of each merge in processing order, one
+    entry per merge, which is what combo scoring consumes. Pairs come from
+    `find_colliding_pairs` in fixed index order, so the outcome is
+    deterministic; a sphere that already merged this call is skipped until
+    the next one.
 
-    Returns the resulting level of each merge, in processing order (for
-    e.g. combo scoring -- one entry per merge, first merge in the shot
-    first).
-
-    Deliberately does not use `find_colliding_pairs`'s `moving_threshold`
-    (unlike `physics.engine.step`'s own bounce-resolution call): merges are
-    the scoring-relevant outcome, not just physics smoothness, so this
-    checks every pair every call rather than risking a resting same-level
-    pair silently never being noticed as touching.
+    Unlike `physics.engine.step`, this passes no `moving_threshold`: a
+    missed merge costs points, not just physics smoothness, so every pair
+    is checked every call rather than trusting that a resting same-level
+    pair cannot be touching.
     """
     already_merged: set[int] = set()
     to_remove: set[int] = set()

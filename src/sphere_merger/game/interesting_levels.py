@@ -1,12 +1,10 @@
-"""Persistent store of one batch run's levels -- e.g. ones where different
-agents' scores diverge notably -- found while batch-testing agents, so
-they can be revisited without re-running the search that found them.
+"""Persistent store of one batch run's levels, so they can be revisited
+without re-running the search that found them.
 
-Holds a single run's worth of data at a time (a new run replaces it
-wholesale, not merged in) -- shared generation parameters (`meta`) are
-stored once, per-level records (`levels`) hold only what actually varies
-(seed + whatever scores the caller wants alongside it). Reproducing a
-level needs only its seed plus `meta`: `generate_random_level` is
+Holds one run at a time; a new run replaces it wholesale rather than
+merging in. Shared generation parameters (`meta`) are stored once and
+per-level records (`levels`) hold only what varies, since reproducing a
+level needs nothing but its seed plus `meta` -- generation is
 deterministic.
 
 `RUNS` below is the one place that says which batch runs exist. Every
@@ -31,22 +29,18 @@ DATA_DIR = Path(__file__).resolve().parents[3] / "data"
 class RunConfig:
     """One batch run's level-generation parameters and the files it owns.
 
-    A run is a difficulty regime, not a row of a shared table: changing an
-    initial sphere count or the shot-queue length makes the results
-    incomparable to the previous ones, so each combination gets its own
-    pair of files rather than overwriting the last run's.
+    A run is a difficulty regime, not a row of a shared table: changing
+    the sphere count or shot-queue length makes results incomparable to
+    the previous ones, so each combination owns its own pair of files.
 
-    `slug` names those files. It defaults to `<n>b_<s>s`, but the first two
-    runs below predate the shot count being variable and are pinned to
-    their original `<n>b` names -- renaming their files would have bought
-    nothing but a diff.
+    `slug` names those files, defaulting to `<n>b_<s>s`. The first two
+    runs predate a variable shot count and stay pinned to their original
+    `<n>b` names, since renaming would buy nothing but a diff.
 
-    `full_mergeable` switches `long_run.py`'s generator from
-    `generate_random_level` to `generate_full_mergeable_level` (see
-    `docs/full_merge_experiment.md`) -- every sphere the level will ever
-    show, start plus shot queue, is then guaranteed constructible down to
-    one single sphere, `merge_popcount == 1` by construction rather than by
-    chance.
+    `full_mergeable` switches `long_run.py` to
+    `generate_full_mergeable_level`, making `merge_popcount == 1` true by
+    construction rather than by chance (see
+    `docs/full_merge_experiment.md`).
     """
 
     sphere_count: int
@@ -97,10 +91,10 @@ RUNS: tuple[RunConfig, ...] = (
 def select_runs(names: Sequence[str]) -> tuple[RunConfig, ...]:
     """The runs in `RUNS` named by `names` (all of them if `names` is empty).
 
-    Producing scripts take these names as command-line arguments, so a
-    re-run can target a single regime: `save_run` replaces its target file
-    wholesale and draws fresh seeds, so iterating all of `RUNS` by default
-    would silently discard the other regimes' existing results.
+    Producing scripts take these names as command-line arguments so a
+    re-run can target one regime. That matters because `save_run` replaces
+    its target wholesale with fresh seeds -- defaulting to all of `RUNS`
+    would silently discard every other regime's results.
 
     >>> [run.name for run in select_runs(["6b_3s"])]
     ['6b_3s']
@@ -128,8 +122,6 @@ def load_run(path: Path = DEFAULT_DB_PATH) -> dict[str, Any]:
 def save_run(
     meta: dict[str, Any], levels: list[dict[str, Any]], path: Path = DEFAULT_DB_PATH
 ) -> None:
-    """Replace `path`'s contents with `meta` (shared generation parameters
-    for this run) and `levels` (one record per level, minimal per-level
-    fields only -- e.g. seed + scores)."""
+    """Replace `path` with this run's `meta` and its per-level `levels`."""
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps({"meta": meta, "levels": levels}, indent=2) + "\n", encoding="utf-8")

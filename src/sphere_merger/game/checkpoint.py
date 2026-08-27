@@ -1,27 +1,23 @@
 """Append-only checkpoint for long batch runs, and finalising one into the
 normal `{"meta": ..., "levels": [...]}` file the rest of the code reads.
 
-A run that takes hours must not hold its results in memory until the end:
-an abort -- deliberate or not -- would throw all of them away, and nothing
-about the work done so far is recoverable from a process that no longer
-exists. So every finished level is appended to a JSON Lines file and
-flushed immediately. The cost is a few hundred microseconds against a
-level that took seconds to compute; the benefit is that the worst an abort
-can cost is the level currently being played.
+A run lasting hours must not hold its results in memory until the end,
+where any abort would discard all of them. Every finished level is instead
+appended to a JSON Lines file and flushed at once, costing a few hundred
+microseconds against a level that took seconds -- so the worst an abort
+can cost is the level currently in flight.
 
 Two files per run:
 
 * `<name>.jsonl` -- one finished level per line, appended as it completes.
 * `<name>.meta.json` -- the run's shared generation parameters, written
-  once when the run starts. Kept beside the lines rather than as line 1 so
-  that appending never has to care about position, and so a truncated last
-  line (power loss mid-write) can be dropped without losing the header.
+  once at the start. Kept beside the lines rather than as line 1, so
+  appending never has to care about position and a truncated last line can
+  be dropped without losing the header.
 
-`finalize` tolerates a truncated final line -- the only line an
-interrupted write can damage. It does hold the finished levels in memory
-while `save_run` serialises them, since that is one JSON document; at the
-sizes these runs reach (tens of MB) that is a bounded, one-off cost at the
-very end, unlike accumulating them for the entire run.
+`finalize` holds the finished levels in memory while `save_run`
+serialises them into one JSON document -- a bounded, one-off cost at the
+very end, unlike accumulating them throughout.
 """
 
 from __future__ import annotations
@@ -49,17 +45,14 @@ class Checkpoint:
     def start(self, meta: dict[str, Any], resume: bool = False) -> None:
         """Write `meta` and, unless resuming, clear any previous lines.
 
-        Truncating matters more than it looks: appending is the whole
-        point of this class, so without it a new run of the same regime
-        would silently continue the previous one's file and finalise a
-        dataset mixing two runs -- with a `meta` describing only the
-        newer. A replaced run replaces both parts or neither, matching
-        `save_run`'s wholesale semantics.
+        Truncating matters: since this class only ever appends, a new run
+        of the same regime would otherwise continue the previous one's
+        file and finalise a dataset mixing two runs under a `meta`
+        describing only the newer.
 
-        `resume=True` is the deliberate exception: the same run continuing
-        after an interruption, where mixing is exactly what is wanted. Only
-        valid when the parameters really are unchanged -- nothing here can
-        check that, so the caller has to mean it.
+        `resume=True` is the deliberate exception, for the same run
+        continuing after an interruption. Nothing here can verify that the
+        parameters really are unchanged, so the caller has to mean it.
         """
         self.directory.mkdir(parents=True, exist_ok=True)
         self.meta_path.write_text(json.dumps(meta, indent=2) + "\n", encoding="utf-8")
@@ -73,10 +66,9 @@ class Checkpoint:
     def append(self, record: dict[str, Any]) -> None:
         """Append one finished level and flush it to disk.
 
-        Opened and closed per call rather than holding a handle open for
-        hours: a handle that outlives an interpreter crash guarantees
-        nothing, while an explicit `flush` here means every line that was
-        reported as done is really on disk.
+        Opened and closed per call rather than keeping a handle open for
+        hours, so that every line reported as done is genuinely on disk
+        even if the interpreter dies.
         """
         line = json.dumps(record, separators=(",", ":"))
         with self.lines_path.open("a", encoding="utf-8") as handle:
@@ -86,10 +78,9 @@ class Checkpoint:
     def records(self) -> Iterator[dict[str, Any]]:
         """Every complete level recorded so far, in order.
 
-        A trailing partial line (written when the process died mid-append)
-        is skipped rather than raising: losing the one level in flight is
-        the accepted cost of not having to write a second copy of every
-        record just to make the last one atomic.
+        A trailing partial line, left behind when the process died
+        mid-append, is skipped rather than raised on -- losing the level
+        in flight beats writing every record twice for atomicity.
         """
         if not self.lines_path.exists():
             return

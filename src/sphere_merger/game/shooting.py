@@ -1,8 +1,7 @@
 """Slingshot shot mechanic: turns an angle + speed into a velocity.
 
-Kept separate from any input device (mouse, agent angle-sweep, ...) so the
-same shot logic works headless -- an agent can call `shoot` directly with a
-candidate angle/speed without any UI involved.
+Deliberately knows nothing about input devices, so an agent sweeping
+candidate angles headless uses exactly the same code as the mouse.
 """
 
 from __future__ import annotations

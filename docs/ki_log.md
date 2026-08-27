@@ -491,3 +491,30 @@ abgewichen.
   nirgends aufgerufen werden: `agents/runner.py::play_round` und
   `::record_shots` (letztere nur noch in einem Docstring *erwaehnt*).
   Entfernung steht aus, kommt in der `agents/`-Runde.
+- **`game/` nachgezogen**: 1112 -> 1033 Zeilen (-7 %), Docstrings -15 %.
+  Wieder unter der eigenen Schaetzung (angekuendigt waren 100-150
+  Zeilen). Der Grund ist inzwischen klar und kein Ausrutscher: die
+  Vorgabe "Docstrings sollen trotzdem sinnvoll sein" und das Ziel
+  "auf das Noetigste" ziehen gegeneinander, und beide Runden sind bewusst
+  auf der Seite von "sinnvoll" gelandet. Wer haerter kuerzen will, muss
+  die *Warum*-Absaetze ganz streichen und sich darauf verlassen, dass die
+  Begruendung in Git-Historie und `docs/` steht.
+- Beim Lesen ein **sachlich falscher Docstring** gefunden:
+  `radius_for_level` behauptete, die level-skalierte Formel
+  (`base_radius * 2**(level/3)`) sei "still what `merge_spheres` computes
+  from conserved mass on every merge, so merged spheres already grow
+  regardless". `merge_spheres` ruft aber genau dieses
+  `radius_for_level(a.level + 1)` auf, das konstant 0.5 liefert --
+  gemergte Kugeln wachsen nicht. Empirisch geprueft (Level 2+2 -> 3,
+  Radius 0.5 -> 0.5) statt nur gelesen. Das ist die zweite Doku-Aussage
+  in diesem Durchgang, die eine laengst ersetzte Implementierung
+  beschrieb; die erste war `find_colliding_pairs`.
+- Ausserdem zeigten mehrere Stellen in `round.py` auf inzwischen
+  geloeschten Code: der `DT`-Kommentar auf `rendering.agent_grid`,
+  `ShotReplay` auf `agents.runner.record_shots` und auf "grid,
+  single-level browser". Damit ist auch der tote Verweis geschlossen, der
+  beim View-Schnitt bewusst stehen geblieben war, weil der Kern damals
+  nicht angefasst werden durfte.
+- Eine echte Doppelung entfernt: der Kommentar an
+  `SETTLE_SPEED_THRESHOLD` und der Docstring von `is_settled` erklaerten
+  wortgleich dasselbe.

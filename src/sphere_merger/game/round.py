@@ -16,21 +16,13 @@ from sphere_merger.physics.engine import step
 from sphere_merger.physics.sphere import Sphere
 from sphere_merger.physics.vector import Vector2
 
+# Small enough to limit tunneling at the shot speeds in use (up to ~25):
+# a fast sphere must not jump past another between two discrete steps.
+# Every physics-driven part of the game shares this value -- headless
+# evaluation, replay and interactive play alike -- so a result computed
+# headless reproduces exactly when watched.
 DT = 1 / 60
-# Finer than the previously checked 1/50 -- current parameter sweep uses
-# higher shot speeds (up to ~25), which raises tunneling risk (a fast
-# sphere's position can jump past another between two discrete steps
-# without ever overlapping); a smaller dt keeps per-step travel distance
-# down instead. Revisit if merges start looking implausible.
-# Shared by every physics-driven part of the game (headless agent
-# evaluation, rendered replay, interactive play) so results computed
-# headless reproduce identically when replayed/watched -- see
-# rendering.agent_grid and rendering.renderer.run_round, which both default
-# their own `dt` to this constant instead of a rendering-only value.
 MAX_SETTLE_STEPS = 2000
-# Matches test_stress.py's REST_TOLERANCE: stacked contacts settle into a
-# small bounded jitter rather than exactly zero (see docs/ki_log.md), so
-# "at rest" has to allow for that instead of requiring exact zero.
 SETTLE_SPEED_THRESHOLD = 0.5
 
 
@@ -84,9 +76,8 @@ def is_settled(
 ) -> bool:
     """Whether every sphere's speed is below `settle_speed_threshold`.
 
-    Matches test_stress.py's REST_TOLERANCE: stacked contacts settle into a
-    small bounded jitter rather than exactly zero (see docs/ki_log.md), so
-    this allows for that instead of requiring exact zero.
+    A threshold rather than exact zero, matching test_stress.py's
+    REST_TOLERANCE: contacts settle into a small bounded jitter.
     """
     return all(sphere.velocity.length() < settle_speed_threshold for sphere in spheres)
 
@@ -94,12 +85,9 @@ def is_settled(
 def settle(spheres: list[Sphere]) -> None:
     """Force every sphere's velocity to exactly zero, in place.
 
-    `is_settled` only checks for a small residual jitter (see its
-    docstring), so spheres that stopped being advanced once they crossed
-    that threshold can still be carrying a tiny non-zero velocity. Left
-    alone, that residual gets picked back up (and visibly resumes moving)
-    once the next shot restarts physics stepping. Call this once a shot is
-    considered over so the next one starts from a genuinely resting field.
+    Spheres accepted by `is_settled` still carry a small residual, which
+    would visibly resume moving once the next shot restarts stepping. Call
+    this at the end of a shot so the next starts from a resting field.
     """
     for sphere in spheres:
         sphere.velocity = Vector2(0.0, 0.0)
@@ -139,16 +127,15 @@ def advance_physics(
 ) -> tuple[int, list[int]]:
     """Advance `state.spheres` by one physics step and resolve any merges.
 
-    Same-level pairs are excluded from the physics bounce solver (see
-    `physics.engine.step`'s `collision_filter`) so `game.merge.resolve_merges`
-    can turn them into a merge instead. Each merge adds
-    `score_fn(new_level, combo_index)` to `state.score`, `combo_index`
-    counting merges since the current shot was spawned (1-based, so pass 0
-    for the first call after `spawn_shot` and reuse the returned value for
-    subsequent calls within the same shot).
+    Same-level pairs are withheld from the bounce solver (`step`'s
+    `collision_filter`) so `resolve_merges` can turn them into a merge
+    instead. Each merge adds `score_fn(new_level, combo_index)` to the
+    score, where `combo_index` counts merges since the shot was spawned:
+    pass 0 on the first call after `spawn_shot`, then feed the returned
+    value back in for the rest of the shot.
 
-    Returns the updated `combo_index` and the resulting level of each merge
-    caused by this step, in the order they happened.
+    Returns the updated `combo_index` and the level of each merge this
+    step caused, in order.
     """
     step(
         state.spheres,
@@ -176,16 +163,13 @@ def play_shot(
 ) -> list[int]:
     """Shoot the next queued sphere and simulate until the field settles.
 
-    Headless composition of `spawn_shot` + repeated `advance_physics`, for
-    agents/tests that don't need to see it animate frame by frame (for
-    that, see `rendering.renderer.run_round`, which drives the same two
-    functions itself). Runs until every sphere's speed drops below
-    `settle_speed_threshold` (at which point `settle` zeroes out the small
-    residual jitter, so the next shot starts from a genuinely resting
-    field), the round is won, or `max_settle_steps` is reached.
+    Headless composition of `spawn_shot` and repeated `advance_physics`,
+    for agents and tests that need no animation;
+    `rendering.renderer.run_round` drives the same two functions itself.
+    Stops when the field settles (then `settle` zeroes the residual), the
+    round is won, or `max_settle_steps` is reached.
 
-    Returns the resulting level of each merge caused by this shot, in the
-    order they happened.
+    Returns the level of each merge this shot caused, in order.
 
     Raises:
         RuntimeError: if the round is already won or lost.
@@ -208,20 +192,17 @@ def play_shot(
 
 
 def touched_sphere_indices(level: LevelDefinition, shots: list[tuple[float, float]]) -> set[int]:
-    """Which of `level.initial_spheres`, by index, get merged away or start
-    moving at some point during a full playthrough of `shots`.
+    """Indices of the initial spheres that merge away or start moving
+    during a full playthrough of `shots`.
 
-    Tracks by object identity against a snapshot of `state.spheres` taken
-    right after `start_round` -- not `level.initial_spheres` itself:
-    `start_round` deep-copies, so even a genuinely untouched sphere is
-    never the same object as the one in `level.initial_spheres`, and
-    comparing against that would report everything as "merged" regardless
-    of what actually happened (a real bug hit once, see
-    docs/level_shrinking.md).
+    Identity is tracked against a snapshot taken after `start_round`, not
+    against `level.initial_spheres`. `start_round` deep-copies, so no
+    sphere is ever the same object as its counterpart in the definition,
+    and comparing there would report everything as merged (a real bug once
+    hit, see docs/level_shrinking.md).
 
-    The complement of the returned set are exactly the spheres a caller
-    can drop without having affected this specific playthrough at all --
-    the basis for `agents.runner.shrink_to_used_spheres`.
+    The complement is exactly the set a caller may drop without affecting
+    this playthrough -- the basis for `agents.runner.shrink_to_used_spheres`.
     """
     state = start_round(level)
     initial_spheres = list(state.spheres)
@@ -246,16 +227,13 @@ def touched_sphere_indices(level: LevelDefinition, shots: list[tuple[float, floa
 
 @dataclass
 class ShotReplay:
-    """Steps a `RoundState` through a fixed, precomputed list of
-    (angle, speed) shots -- e.g. one recorded via `agents.runner.record_shots`
-    -- one call at a time, instead of asking an agent live.
+    """Steps a `RoundState` through a precomputed list of (angle, speed)
+    shots one call at a time, instead of asking an agent live.
 
-    Shared by every "replay a recorded playthrough" view (grid, single-level
-    browser) so the check-and-settle atomicity in `step_physics` (see its
-    docstring) only has to be right in one place -- a previous, per-view
-    copy of this same logic had that atomicity broken in exactly one of its
-    two copies (see docs/physics_optimizations.md), which a second
-    hand-duplicated copy would have been just as easy to get wrong again.
+    Shared by every view that replays a recorded playthrough, so the
+    check-and-settle atomicity in `step_physics` only has to be right
+    once. An earlier per-view copy of this logic had exactly that broken
+    in one of its two copies (see docs/physics_optimizations.md).
     """
 
     level: LevelDefinition
@@ -281,13 +259,11 @@ class ShotReplay:
     def spawn_next_shot(self) -> None:
         """Spawn the next recorded shot, if the round isn't over and any are left.
 
-        Remembers the spawned sphere as `current_shot` -- a caller that
-        wants to highlight "the sphere just shot" checks it by identity
-        (`is`) against `state.spheres`, since a merge replaces rather than
-        mutates a sphere (see `game.merge.resolve_merges`): once this one
-        merges into something else, the identity check stops matching and
-        the highlight naturally disappears instead of following the merge
-        result around.
+        Remembers it as `current_shot` so a view can highlight the sphere
+        just shot by identity (`is`) against `state.spheres`. Because a
+        merge replaces rather than mutates, that check stops matching the
+        moment this sphere merges, and the highlight disappears by itself
+        instead of following the merge result around.
         """
         if not self.state.is_over and self.shot_index < len(self.shots):
             angle, speed = self.shots[self.shot_index]
@@ -297,16 +273,13 @@ class ShotReplay:
             self.combo_index = 0
 
     def step_physics(self, dt: float = DT) -> None:
-        """Advance the current shot by one frame; if that frame brings it
-        below the settle threshold, zero the residual velocity immediately
-        (see `settle`'s docstring) instead of on some later call.
+        """Advance the current shot by one frame, zeroing the residual
+        velocity in the same call if this frame settles it.
 
-        Checking and settling in the same call matters: a caller's main
-        loop typically stops stepping once `settled` is reported, so a
-        `settle()` that only fires on a *later* call would never actually
-        run -- the just-barely-sub-threshold velocity from the frame
-        settling was first detected would carry over, unzeroed, into the
-        next shot instead of starting it from genuine rest.
+        The atomicity matters: a caller's loop stops stepping as soon as
+        `settled` reports true, so a `settle()` deferred to a later call
+        would never run at all, and the sub-threshold velocity would carry
+        into the next shot.
         """
         if self.settled:
             return

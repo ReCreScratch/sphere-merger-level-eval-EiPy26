@@ -1,12 +1,9 @@
-"""Round setup: what the field looks like at the start and which spheres
-the player/agent gets to shoot, in order.
+"""Round setup: the starting field plus the ordered queue of spheres the
+player or agent gets to shoot.
 
-Both hand-designed baseline levels (built directly with explicit values)
-and randomly generated ones (`generate_random_level`) produce the same
-`LevelDefinition`, so the rest of the game/agent code never has to care
-which one it got -- and both are fully reproducible: baseline levels
-because their values are literal, random ones because generation is
-seeded.
+Hand-designed and randomly generated levels produce the same
+`LevelDefinition`, so nothing downstream cares which it got. Both are
+reproducible -- the former by literal values, the latter by seed.
 """
 
 from __future__ import annotations
@@ -26,13 +23,11 @@ _MAX_PLACEMENT_ATTEMPTS = 500
 def radius_for_level(level: int, base_radius: float = BASE_RADIUS) -> float:
     """Radius of a fresh sphere at `level`.
 
-    Currently returns `base_radius` unconditionally, regardless of `level`
-    -- a temporary simplification (uniform ball size/mass) for tuning aim,
-    power and friction by hand without size variety in the way. The
-    level-scaled radius this used to return (`base_radius * 2**(level/3)`)
-    is still what `merge_spheres` computes from conserved mass on every
-    merge, independently of this function, so merged spheres already grow
-    regardless.
+    Returns `base_radius` for every level: a deliberate simplification, so
+    aim, power and friction can be tuned by hand without size variety in
+    the way. Since `merge_spheres` sizes merged spheres through this same
+    function, every sphere on the field has the same radius -- which is
+    also why `Sphere` needs no mass.
 
     >>> radius_for_level(0) == radius_for_level(3) == BASE_RADIUS
     True
@@ -47,17 +42,15 @@ class LevelDefinition:
     Attributes:
         boundary: Play field.
         initial_spheres: Fixed starting state of the field.
-        shot_queue: Levels of the spheres the player/agent receives, in
-            order -- known in full in advance (not drawn on the fly), so
-            baseline levels have a well-defined solution and a lookahead
-            agent can see more than one shot ahead.
+        shot_queue: Levels of the spheres received, in order. Known in
+            full in advance rather than drawn on the fly, so levels have a
+            well-defined solution and lookahead can see past one shot.
         spawn_position: Fixed point every queued sphere appears at; only
-            angle/speed (see `game.shooting.shoot`) are chosen per shot.
+            angle and speed are chosen per shot.
         target_score: Score needed to win the round.
         physics_config: Physics tuning to simulate this level with.
-        seed: Seed used to generate this level, if it was generated
-            (`None` for hand-designed levels). Provenance only -- nothing
-            reads it at runtime.
+        seed: Provenance for generated levels, `None` for hand-designed
+            ones. Nothing reads it at runtime.
     """
 
     boundary: Boundary
@@ -82,10 +75,8 @@ def _non_overlapping_position(
 ) -> Vector2:
     """A position that doesn't overlap any of `placed`.
 
-    Rejection sampling: keeps drawing candidates from `rng` until one
-    clears every already-placed sphere, so a generated level starts from a
-    valid, non-overlapping layout instead of relying on the first shot's
-    physics step to push overlapping spawns apart.
+    Rejection sampling, so a generated level starts from a valid layout
+    instead of relying on the first physics step to untangle it.
 
     Raises:
         ValueError: if no clear position is found within
@@ -117,10 +108,9 @@ def generate_random_level(
 ) -> LevelDefinition:
     """Randomly generate a reproducible level from `seed`.
 
-    Uses a private `random.Random(seed)` instance rather than the global
-    `random` module, so generation never depends on (or disturbs) unrelated
-    random state elsewhere in the process -- the same `seed` and parameters
-    always produce the exact same level.
+    Uses a private `random.Random(seed)` rather than the global `random`
+    module, so generation neither depends on nor disturbs random state
+    elsewhere in the process.
 
     >>> field_ = Boundary(-5.0, 5.0, -5.0, 5.0)
     >>> spawn = Vector2(0.0, 0.0)
@@ -153,12 +143,12 @@ def generate_random_level(
 
 
 def total_value(levels: list[int]) -> int:
-    """Sum of `2**level` over `levels` -- the quantity merging conserves
-    exactly (two same-level spheres combine into one at `level + 1`:
-    `2 * 2**L == 2**(L + 1)`), so this is invariant across a whole round no
-    matter how it plays out. Nothing else in the game creates, destroys, or
-    duplicates a sphere (`merge_spheres` is the only place a sphere ever
-    stops existing, and always as exactly half of a same-value replacement).
+    """Sum of `2**level` over `levels`, the quantity merging conserves.
+
+    A merge replaces two spheres at level L by one at L+1, and
+    `2 * 2**L == 2**(L + 1)`, so the total is invariant however a round
+    plays out. `merge_spheres` is the only place a sphere stops existing,
+    always as half of a same-value replacement.
 
     >>> total_value([0, 0, 1])
     4
@@ -167,13 +157,13 @@ def total_value(levels: list[int]) -> int:
 
 
 def merge_popcount(levels: list[int]) -> int:
-    """Fewest spheres `levels` can ever be reduced to by merging, regardless
-    of play order or skill -- the number of set bits in `total_value`'s
-    binary form (`total_value` is conserved exactly by every merge, so this
-    is the same number a full binary "carry" reduction of that total would
-    leave behind). `1` means the whole set can in principle collapse into a
-    single sphere; anything higher is a hard ceiling no strategy can beat,
-    regardless of skill or physical routing.
+    """Fewest spheres `levels` can be reduced to by merging, at best play.
+
+    The number of set bits in `total_value`'s binary form: since merging
+    conserves that total, no sequence of merges can do better than a full
+    binary carry reduction. `1` means the set can in principle collapse
+    into a single sphere; anything higher is a ceiling no skill or routing
+    can beat.
 
     >>> merge_popcount([0, 0, 1])  # 1+1+2=4=2**2, one bit set
     1
@@ -186,19 +176,17 @@ def merge_popcount(levels: list[int]) -> int:
 def _split_to_leaves(
     rng: random.Random, count: int, target_level: int, min_level: int, max_level: int
 ) -> list[int]:
-    """`count` leaf levels from recursively splitting a single node at
-    `target_level` into two children at `level - 1` -- the exact reverse of
-    `merge_spheres` -- so their `total_value` sums to exactly
-    `2**target_level` by construction, whatever split choices are made
-    along the way. That is what lets `generate_full_mergeable_level` reach
+    """`count` leaf levels that sum to exactly `2**target_level` in value.
+
+    Repeatedly splits a node at `level` into two at `level - 1`, the exact
+    reverse of `merge_spheres`. Value is therefore conserved by
+    construction, which is how `generate_full_mergeable_level` reaches
     `merge_popcount == 1` without ever rejecting a candidate.
 
-    Every leaf above `max_level` is split (forced -- it would not be a
-    valid sphere level otherwise); a leaf at `min_level` cannot split
-    further. Once every leaf is within range, splits beyond what is forced
-    are chosen at random among the currently splittable leaves -- this is
-    where the composition varies from call to call, not from the target
-    level's choice alone.
+    Leaves above `max_level` must split (they would not be valid sphere
+    levels); leaves at `min_level` cannot. Once all are in range, the
+    remaining splits are drawn at random among the splittable leaves --
+    that is what varies the composition between calls.
     """
     leaves = [target_level]
     while any(level > max_level for level in leaves):
@@ -216,15 +204,12 @@ def _split_to_leaves(
 def _feasible_target_levels(
     count: int, min_level: int, max_level: int, max_target_level: int
 ) -> list[int]:
-    """Every `target_level` (up to `max_target_level`) `_split_to_leaves`
-    can reach exactly `count` leaves from, staying within
-    `[min_level, max_level]` throughout.
+    """Target levels from which `_split_to_leaves` can reach `count` leaves.
 
-    Bounded below by the *forced* leaf count at that target level (split
-    everything down until nothing exceeds `max_level`) and above by the
-    *maximum* reachable leaf count (split everything all the way down to
-    `min_level`) -- every leaf count in between is reachable too, since
-    each individual split changes the leaf count by exactly one.
+    The reachable range runs from the forced leaf count (split only until
+    nothing exceeds `max_level`) to the maximum one (split everything down
+    to `min_level`). Everything in between is reachable too, because a
+    single split changes the leaf count by exactly one.
     """
     feasible = []
     for level in range(min_level, max_target_level + 1):
@@ -246,33 +231,26 @@ def generate_full_mergeable_level(
     max_target_level: int = 7,
     physics_config: PhysicsConfig | None = None,
 ) -> LevelDefinition:
-    """Like `generate_random_level`, but `merge_popcount` of every sphere
-    that will ever be on the field (initial spheres *and* the shot queue,
-    combined) is always exactly 1 -- the level can in principle collapse
-    into a single sphere. Not a claim that any actual playthrough achieves
-    that: routing same-level spheres into contact, in the right order,
-    under real physics and a limited shot budget is a separate, much
-    harder question this generator has no say over -- it only guarantees
-    the necessary arithmetic precondition, which `generate_random_level`
-    satisfies just by chance (roughly 10-15% of the time, empirically, for
-    typical sphere/shot counts).
+    """Like `generate_random_level`, but with `merge_popcount` always 1.
 
-    Built by reversing `merge_spheres`: pick a target level for the single
-    sphere the whole level *could* reduce to, then recursively split it
-    down into exactly `initial_sphere_count + shot_count` leaves (see
-    `_split_to_leaves`). Splitting conserves `total_value` exactly, the
-    same invariant merging conserves, just run backwards -- so the result
-    always has `merge_popcount == 1` by construction. No rejection
-    sampling, no retry loop: every candidate this draws is already valid.
+    Counting initial spheres and shot queue together, the level can in
+    principle collapse into a single sphere. That is an arithmetic
+    precondition only -- whether a playthrough actually routes the right
+    spheres into contact within the shot budget is a separate and much
+    harder question. `generate_random_level` happens to satisfy it around
+    10-15% of the time.
 
-    The target level is drawn uniformly from every level in
-    `[level_range[0], max_target_level]` that can actually produce the
-    requested sphere count within `level_range` (`_feasible_target_levels`)
-    -- this is where the variety between calls comes from. A target level
-    equal to the forced minimum or maximum leaf count for its own value
-    has exactly one possible composition (e.g. "every leaf at `min_level`"
-    or "every leaf at `max_level`"); only target levels strictly between
-    those bounds allow a genuinely mixed multiset of levels.
+    Built by reversing `merge_spheres`: pick the level of the single
+    sphere everything could reduce to, then split it into exactly
+    `initial_sphere_count + shot_count` leaves (`_split_to_leaves`). Since
+    splitting conserves `total_value`, the result is valid by
+    construction -- no rejection sampling, no retry loop.
+
+    The target level is drawn from those that can actually produce the
+    requested count (`_feasible_target_levels`), which is where variety
+    between calls comes from. At the extremes of that range only one
+    composition exists (all leaves at `min_level`, or all at `max_level`);
+    mixed levels need a target strictly in between.
 
     Raises:
         ValueError: if no target level up to `max_target_level` can
