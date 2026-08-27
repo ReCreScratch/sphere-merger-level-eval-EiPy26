@@ -365,3 +365,53 @@ abgewichen.
   standardmaessig. Alle anderen acht Regime sind unberuehrt (Zeilenzahlen
   gegen das Lauf-Log geprueft). Neuerhebung von `5b_3s` auf Nutzerwunsch
   zurueckgestellt, noch offen.
+
+## 2026-08-27
+- **Reduktion auf den Kern begonnen.** Anlass: der Code soll vollstaendig
+  gelesen und verstanden werden, ohne Zeit in Code zu stecken, der ohnehin
+  entfernt wird. Vorgeschlagene und uebernommene Reihenfolge: erst Zweck
+  klaeren (welche Teile traegt der Bericht?), dann mechanisch schneiden,
+  **erst dann** lesen. Begruendung: zuerst lesen verschwendet Aufwand auf
+  ~40 % der Zeilen, zuerst schneiden ohne geklaerten Zweck loescht
+  irgendwann das, wovon der Bericht einen Screenshot gebraucht haette.
+- Messung als Entscheidungsgrundlage statt Bauchgefuehl: `rendering/` ist
+  1759 Zeilen (41 % von `src/`) und **topologisches Blatt** -- kein Modul
+  ausserhalb importiert es. Damit ist der Schnitt nicht nur billig,
+  sondern risikofrei: er kann `physics`/`game`/`agents` nicht brechen.
+  `scripts/` ist mit 2644 Zeilen mehr als halb so gross wie `src/` und
+  faellt beim "ich lese das Projekt" reflexhaft unter den Tisch.
+- Views auf einen reduziert (Nutzerentscheidung): behalten wird die
+  Sidebar-Ansicht `rendering/level_compare.py` -- sie hat die klickbare
+  Liste mit `CompareEntry.reason` ("a one-line, human-written note on why
+  this seed made the list"), also genau die gewuenschte Kurzbeschreibung
+  je Level. `level_browser.py` (aeltere Vor/Zurueck-Variante, null
+  Sidebar), `agent_grid.py` und `grid_view.py` entfernt (765 Zeilen), dazu
+  9 abhaengige Skripte und 2 Testdateien.
+- `scripts/agent_batch_timing.py` ist Datenproduzent *und* nutzte
+  `agent_grid`, wurde deshalb nicht geloescht sondern operiert: nur der
+  `SHOW_GRID`-Block raus. Ungefaehrlich, weil `save_run(...)` im Code vor
+  dem Grid-Block steht -- die Daten sind geschrieben, bevor die Anzeige
+  beginnt. `_build_level` und `random_records` gehoeren zum Rechenpfad und
+  blieben unangetastet.
+- **Rust bleibt.** Erste Claude-Annahme war, die Extension solle mit
+  entfernt werden -- Missverstaendnis; der Nutzer meinte, er werde sie
+  sich nicht *ansehen*. Sie wird im Bericht erwaehnt, aber nicht
+  begruendet (Python-Kurs). Unabhaengig davon war der Rust-Schnitt ohnehin
+  nicht als erster Schritt vorgeschlagen worden, weil die gemessenen ~18x
+  von `simulate_shot_native` genau auf dem Pfad der noch geplanten
+  Datenerhebung liegen.
+- Vorgabe "das Projekt muss genauso laufen wie vorher, der Kern darf sich
+  nicht aendern" wurde nachgewiesen statt behauptet: Baseline vorher
+  gemessen (132 Tests), nachher 129 -- die Differenz ist exakt die Zahl
+  der Testfunktionen in den zwei geloeschten Testdateien (1 + 2, aus dem
+  Tag verifiziert). Diff gegen `physics`/`game`/`agents`/`metrics`/`native`
+  ist leer, alle 12 verbliebenen Skripte importieren sauber,
+  ruff/mypy/format gruen.
+- Fehler dabei: ein `git add -A` waehrend der Verifikation stagede
+  versehentlich ~370 MB lokale Rohdaten aus `data/` mit (bewusst nicht im
+  Repo, siehe Eintrag vom 2026-08-05). Vor dem Commit bemerkt und per
+  `git restore --staged data/` zurueckgenommen -- `data/*.json` steht
+  nicht in `.gitignore`, nur die Checkpoints, was solche Unfaelle
+  beguenstigt.
+- Tag `vor-reduktion` vor dem ersten Schnitt gesetzt, damit jeder
+  entfernte Teil mit einem Befehl zurueckholbar ist.

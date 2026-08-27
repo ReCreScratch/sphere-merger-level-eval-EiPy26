@@ -47,9 +47,9 @@ Progress bar (pygame, same pattern as demo_find_divergence_live.py) is
 drawn once per level, not per simulation step -- negligible next to the
 seconds-per-level agent search itself.
 
-Set env var SPHERE_MERGER_NO_GRID=1 to skip the final interactive grid
-replay (e.g. for unattended/headless batch runs) -- the data is already
-saved by then, the grid is only for visual inspection.
+The run ends once the data is saved and the top-N summary is printed; to
+look at the resulting levels, use scripts/browse_interesting_levels.py
+(reads the saved file, no re-simulation).
 
 The exact `meta`/`levels` schema saved here is documented in
 docs/data_schema.md -- update that doc in the same commit as any change
@@ -58,7 +58,6 @@ to the `save_run(...)` call below (field added/removed/renamed).
 
 from __future__ import annotations
 
-import os
 import random
 import sys
 import time
@@ -87,12 +86,9 @@ from sphere_merger.game.level import LevelDefinition, generate_random_level
 from sphere_merger.physics.boundary import Boundary
 from sphere_merger.physics.engine import native_backend
 from sphere_merger.physics.vector import Vector2
-from sphere_merger.rendering.agent_grid import run_agent_grid
-from sphere_merger.rendering.renderer import RenderConfig
 
 BACKEND: Literal["python", "rust"] = "rust"
 TOP_N = 9
-SHOW_GRID = os.environ.get("SPHERE_MERGER_NO_GRID") != "1"
 
 FIELD = Boundary(x_min=-6.0, x_max=6.0, y_min=-6.0, y_max=6.0)
 SPAWN_MARGIN = 1.0
@@ -116,8 +112,9 @@ class LevelResult:
 
     Random is sampled RANDOM_SAMPLE_COUNT times (see module docstring):
     `random_scores` holds every sample's final score, `random_records`
-    only the first sample's full shot list, kept around just so the grid
-    replay at the end has *a* random playthrough to show.
+    only the first sample's full shot list. Only `random_scores` is saved;
+    `random_records` is kept in memory so a caller in this script can show
+    or inspect *a* random playthrough without re-simulating it.
     """
 
     seed: int
@@ -316,7 +313,6 @@ def run_batch(
 
     print(f"\nTop {TOP_N} nach Score-Differenz (greedy/lookahead), {run.name}:")
 
-    cells: dict[str, tuple[LevelDefinition, list[tuple[float, float]]]] = {}
     for entry in top:
         random_mean = sum(entry.random_scores) / len(entry.random_scores)
         greedy_score = final_score(entry.greedy_records)
@@ -326,24 +322,6 @@ def run_batch(
             f"  seed {entry.seed}: random={random_mean:.1f} greedy={greedy_score} "
             f"lookahead={lookahead_score} (gap {entry.gap}, combo {lookahead_combo})"
         )
-
-        if SHOW_GRID:
-            level = _build_level(entry.seed, run)
-            cells[f"seed {entry.seed} / random sample 0 ({entry.random_scores[0]})"] = (
-                level,
-                shots_of(entry.random_records),
-            )
-            cells[f"seed {entry.seed} / greedy ({greedy_score})"] = (
-                level,
-                shots_of(entry.greedy_records),
-            )
-            cells[f"seed {entry.seed} / lookahead ({lookahead_score})"] = (
-                level,
-                shots_of(entry.lookahead_records),
-            )
-
-    if SHOW_GRID:
-        run_agent_grid(cells, columns=9, render_config=RenderConfig(window_size=(1800, 1000)))
 
 
 if __name__ == "__main__":
