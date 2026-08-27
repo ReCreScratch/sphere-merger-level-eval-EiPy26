@@ -1,20 +1,18 @@
-"""Side-by-side playback of one level's four (original/shrunk x
-greedy/lookahead) combinations at once, picked by a caller-supplied
-curated list of seeds -- unlike `rendering.level_browser`'s one-at-a-time
-toggle, all four play together here so the actual difference between them
-is visible directly, not something you have to remember across a toggle
-click.
+"""Side-by-side playback of one level's four combinations at once --
+original vs. shrunk, crossed with greedy vs. lookahead -- over a
+caller-supplied list of curated seeds.
 
-Reuses `game.round.ShotReplay` for playback and `rendering.renderer`'s
-viewport/drawing primitives -- same building blocks as
-`rendering.agent_grid`'s fixed grid, plus a clickable sidebar list for
-picking which level's four panels are showing.
+All four play together rather than one at a time, so the difference
+between them is visible directly instead of having to be remembered
+across a toggle. Playback comes from `game.round.ShotReplay`, drawing
+from `rendering.renderer`, and a clickable sidebar picks which level's
+four panels are showing.
 
 Each panel outlines the sphere just shot (white ring, via
-`ShotReplay.current_shot`) and the next one on deck at the spawn point
-(gold ring, `renderer.next_ball_preview` -- same convention the
-interactive game uses), and its HUD lists the rest of the shot queue --
-useful for reading a multi-shot plan at a glance, not just the outcome.
+`ShotReplay.current_shot`) and the next one waiting at the spawn point
+(gold ring, the same convention the interactive game uses), while its HUD
+lists the rest of the shot queue -- enough to read a multi-shot plan at a
+glance, not just its outcome.
 """
 
 from __future__ import annotations
@@ -102,9 +100,7 @@ class CompareEntry:
 @dataclass
 class _Cell(ShotReplay):
     """One panel's own round, playback position and on-screen area --
-    `ShotReplay` plus grid-specific display fields (see `agent_grid._Cell`,
-    same pattern, kept as its own copy since the two views' cells differ
-    in what else they need to carry)."""
+    `ShotReplay` plus the fields needed to draw and label it."""
 
     label: str
     viewport: Viewport

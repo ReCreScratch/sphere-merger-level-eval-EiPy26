@@ -33,10 +33,9 @@ class LookaheadAgent:
         speed: float = DEFAULT_SPEED,
         executor: Executor | None = None,
     ) -> None:
-        """`executor`, if given, evaluates this shot's candidates (each
-        with its own full next-shot sweep) across its worker processes
-        instead of sequentially -- every candidate is an independent
-        simulation, so this only speeds things up, it never changes the
+        """`executor`, if given, spreads this shot's candidates -- each
+        carrying its own full next-shot sweep -- over worker processes.
+        Candidates are independent, so this only affects speed, never the
         result. The caller owns the executor's lifecycle.
         """
         self._angles = candidate_angles(angle_range, angle_step)

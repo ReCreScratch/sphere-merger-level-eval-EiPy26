@@ -68,10 +68,17 @@ def quantile(values: list[float], q: float) -> float:
 
 
 PAYOFF_CONC_MIN = 0.9
-"""How concentrated an `AHA` level's payoff has to be. Not batch-relative:
-this is a statement about the level's *shape* (nearly everything riding on
-the last shot), which means the same thing regardless of the batch around
-it. Top-gap levels sit at a median of ~0.95, ordinary ones near 0.67."""
+"""How concentrated an `AHA` level's payoff has to be.
+
+Deliberately not batch-relative: it describes the level's *shape*, nearly
+everything riding on the last shot. Top-gap levels sit at a median of
+~0.95, ordinary ones near 0.67.
+
+Known limitation: the threshold is absolute while payoff naturally
+spreads over more shots as `shot_count` grows, so it under-tags longer
+rounds -- `aha` counts collapse from 846 to 71 between the 2- and 4-shot
+regimes even though the gap median *rises*. Normalising by `1/shot_count`
+is the obvious fix and has not been done."""
 
 
 def tag_batch(metrics: list[LevelMetrics]) -> dict[int, set[Archetype]]:
@@ -80,16 +87,17 @@ def tag_batch(metrics: list[LevelMetrics]) -> dict[int, set[Archetype]]:
     Tags are independent: a level can carry several or none.
 
     Comparisons against a batch quantile are *strict* wherever ties would
-    over-tag, which matters more than it looks: `max_combo` only ever
-    takes a handful of integer values, so its 90th percentile is typically
-    a value hundreds of levels share exactly, and a `>=` there would tag
-    most of the batch as remarkable.
+    over-tag. That matters most for `max_combo`, which takes only a
+    handful of integer values: its 90th percentile is typically a value
+    hundreds of levels share exactly, and `>=` would tag most of the batch
+    as remarkable.
 
-    The one exception is `LUCK`'s gap cutoff, which is inclusive. Gaps have
-    a hard floor at zero (lookahead never loses to greedy at
-    `shot_count=2`) and a quarter of every real batch sits exactly on it,
-    so the 25th percentile *is* the floor -- a strict `<` there is not
-    selective, it is unsatisfiable, and the tag would silently never fire.
+    `LUCK`'s gap cutoff is the exception and stays inclusive. At
+    `shot_count=2` gaps have a hard floor at zero and a quarter of every
+    batch sits exactly on it, so the 25th percentile *is* that floor --
+    a strict `<` would not be selective but unsatisfiable, and the tag
+    would silently never fire. Above 2 shots negative gaps do occur, so
+    the floor argument no longer applies, though inclusive remains safe.
     """
     if not metrics:
         return {}

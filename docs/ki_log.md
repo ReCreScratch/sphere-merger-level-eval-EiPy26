@@ -518,3 +518,39 @@ abgewichen.
 - Eine echte Doppelung entfernt: der Kommentar an
   `SETTLE_SPEED_THRESHOLD` und der Docstring von `is_settled` erklaerten
   wortgleich dasselbe.
+- **`agents/` und `metrics/` abgeschlossen** (966 -> 937 Zeilen). Dabei
+  die beiden toten Funktionen `play_round` und `record_shots` entfernt,
+  plus den damit verwaisten `RoundState`-Import. Nutzerentscheidung
+  zwischendurch: das *Warum* darf in den Docstrings bleiben, laenger ist
+  nicht schlimm -- gestrichen wird nur Historie, Doppelung und
+  Falschaussage. Der Kuerzungsgewinn faellt damit bewusst kleiner aus.
+- **Zwei weitere veraltete Doku-Aussagen gefunden**, beide an inhaltlich
+  wichtigen Stellen. `LevelMetrics.depth_gap` behauptete, der Gap sei
+  "never negative in practice (checked: 0 of 2000 levels)" -- der lange
+  Lauf hat aber in 9-10 % der 3- und 4-Schuss-Level negative Gaps
+  gefunden. Jetzt steht dort die tatsaechliche Gueltigkeitsgrenze: bei
+  2 Schuessen reicht die 2-Ply-Suche bis zum Rundenende und der Gap ist
+  eine Optimalitaetsaussage, darueber nicht mehr. `PAYOFF_CONC_MIN`
+  behauptete, unabhaengig vom Batch dasselbe zu bedeuten; dokumentiert
+  ist jetzt, dass die absolute Schwelle laengere Runden untertaggt
+  (`aha` faellt von 846 auf 71 zwischen 2- und 4-Schuss-Regime, obwohl
+  der Gap-Median steigt) und die Normierung auf `1/shot_count` aussteht.
+- Vierter toter Verweis: `metrics/level_metrics.py` zeigte auf
+  `docs/interesting_levels.md`, das nie existiert hat.
+- **Luecke im eigenen Pruefwerkzeug gefunden und geschlossen.** Der
+  AST-Fingerprint meldete Aenderungen an `base.py` und `archetypes.py`,
+  obwohl dort nur Docstrings angefasst wurden. Ursache: `EXECUTOR_CHUNKSIZE`
+  und `PAYOFF_CONC_MIN` tragen *Attribut*-Docstrings (nackte Strings nach
+  einer Zuweisung, PEP 258), die `ast.get_docstring` nicht als Docstring
+  erkennt -- das Werkzeug strippte nur `body[0]`. Statt die Abweichung
+  wegzuerklaeren wurde das Werkzeug korrigiert (jedes nackte
+  String-Statement wird entfernt, egal an welcher Position); danach
+  bestaetigte sich, dass ausser `runner.py` keine Datei einen echten
+  Code-Unterschied hat. Lehre fuers Verfahren: ein Nachweiswerkzeug ist
+  selbst pruefbedurftig, ein "grüner" Beweis mit falscher Annahme ist
+  schlechter als gar keiner.
+- Stand nach der gesamten Kern-Reduktion: 129 Tests gruen,
+  ruff/format/mypy sauber, interrogate 81.4 % (leicht unter den 81.6 %
+  vorher, weil die zwei entfernten Funktionen dokumentiert waren), alle
+  8 Skripte importieren, und im gesamten `src/` gibt es keinen Verweis
+  mehr auf geloeschten Code.

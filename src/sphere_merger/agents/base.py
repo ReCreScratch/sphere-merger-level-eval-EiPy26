@@ -29,19 +29,16 @@ ANGLE_STEP_DEGREES = 1.0
 EXECUTOR_CHUNKSIZE = 4
 """How many candidate angles an agent hands a worker per task.
 
-`Executor.map`'s default of one task per item is a bad fit here and was
-measurably worse than useless for `GreedyAgent`: its per-candidate work
-is a single `simulate_shot`, so with one candidate per task the pickling
-round-trip costs more than the simulation, and the parallel sweep ran
-*slower* than the same sweep done sequentially in the caller (0.089s vs
-0.062s measured; batching to 4 brings it to 0.018s). `LookaheadAgent`
-suffers far less -- each of its tasks already contains a full next-shot
-sweep -- but gains from batching too.
+`Executor.map`'s default of one task per item was measurably worse than
+useless for `GreedyAgent`: its per-candidate work is a single
+`simulate_shot`, so the pickling round-trip cost more than the simulation
+and the parallel sweep ran *slower* than the sequential one (0.089s vs
+0.062s; batching to 4 gives 0.018s). `LookaheadAgent` suffers far less --
+each of its tasks already holds a full next-shot sweep -- but still gains.
 
-Four is a compromise on the number of candidates (91 by default): large
-enough to amortise the round-trip, small enough that the resulting ~23
-chunks still spread over a 16-worker pool without leaving workers idle
-at the tail.
+Four is a compromise against the 91 default candidates: large enough to
+amortise the round-trip, small enough that the resulting ~23 chunks still
+spread over a 16-worker pool without idling workers at the tail.
 """
 
 
@@ -66,18 +63,18 @@ def candidate_angles(
 
 
 def _clone_state(state: RoundState) -> RoundState:
-    """Cheap `RoundState` clone for trial simulation, replacing `copy.deepcopy`.
+    """Cheap `RoundState` clone for trial simulation, instead of `deepcopy`.
 
-    Shares `state.level` by reference instead of copying it: nothing on the
-    `simulate_shot` path (`spawn_shot`, `advance_physics`) ever mutates it,
-    so its `Boundary`/`PhysicsConfig`/`initial_spheres`/`shot_queue` subtree
-    doesn't need isolating -- `deepcopy` walked and copied all of that on
-    every single call regardless. `Vector2` is frozen, so a shallow copy of
-    each `Sphere` is enough to isolate `spheres`; `remaining_queue` gets its
-    own list since `spawn_shot` mutates it via `pop(0)`. This is on the
-    hottest path in the codebase -- agents call it thousands of times per
-    decision (`LookaheadAgent` alone: candidates + candidates^2) -- so the
-    per-call constant factor matters far more here than elsewhere.
+    Shares `state.level` by reference: nothing on the `simulate_shot` path
+    mutates it, so its whole subtree needs no isolating, whereas
+    `deepcopy` walked and copied all of it on every call. `Vector2` is
+    frozen, so a shallow copy per `Sphere` isolates `spheres`;
+    `remaining_queue` needs its own list because `spawn_shot` pops from
+    it.
+
+    This is the hottest path in the codebase -- `LookaheadAgent` alone
+    calls it candidates + candidates^2 times per decision -- so the
+    per-call constant factor matters more here than anywhere else.
     """
     return RoundState(
         level=state.level,
@@ -91,18 +88,17 @@ def _clone_state(state: RoundState) -> RoundState:
 def _simulate_shot_native(
     state: RoundState, angle_degrees: float, speed: float
 ) -> tuple[RoundState, int]:
-    """`simulate_shot`'s native-backend branch: the whole settle loop (spawn
-    + repeated physics step + merge-resolve + score) runs as one call into
-    `sphere_merger_native.simulate_shot_native` instead of many Python-level
-    `step` calls -- see docs/physics_optimizations.md for why this, not
-    `step_native` alone, is where the native backend's real speedup is.
+    """`simulate_shot`'s native-backend branch.
 
-    A custom `score_fn`/`max_settle_steps`/`settle_speed_threshold` other
-    than `game.round`'s defaults isn't supported here -- nothing in this
-    codebase ever passes one to `play_shot` on this path, so the native
-    settle loop hardcodes `game.scoring.default_merge_score` and these
-    constants directly (arbitrary Python callables can't cross the FFI
-    boundary anyway).
+    The entire settle loop -- spawn, repeated step, merge, score -- runs as
+    one call into the extension rather than many Python-level `step`
+    calls. That, not `step_native` alone, is where the native backend's
+    real speedup comes from (see docs/physics_optimizations.md).
+
+    Custom `score_fn`, `max_settle_steps` or `settle_speed_threshold` are
+    unsupported here: arbitrary Python callables cannot cross the FFI
+    boundary, so the native loop hardcodes `game.round`'s defaults.
+    Nothing in this codebase passes anything else on this path.
     """
     import sphere_merger_native
 
@@ -159,14 +155,14 @@ def simulate_shot(state: RoundState, angle_degrees: float, speed: float) -> tupl
 
 
 def candidate_total_gain(args: tuple[RoundState, float, float, list[float]]) -> tuple[float, int]:
-    """One candidate's own gain plus the best next-shot gain reachable from
-    it (just its own gain if the round is already over there -- nothing
-    left to look ahead into).
+    """One candidate's own gain plus the best next-shot gain from there.
 
-    Module-level (not a method) so it can be sent to worker processes for
-    parallel evaluation (must be picklable by reference). Shared by
-    `LookaheadAgent` (its primary ranking) and `GreedyAgent` (a tiebreaker
-    among candidates that tie on immediate gain).
+    Falls back to just its own gain if the round ends on this shot, since
+    there is nothing left to look ahead into.
+
+    Module-level rather than a method so it stays picklable by reference
+    and can be sent to worker processes. Shared by `LookaheadAgent` as its
+    primary ranking and by `GreedyAgent` as a tiebreaker.
     """
     state, angle, speed, angles = args
     trial, gain = simulate_shot(state, angle, speed)

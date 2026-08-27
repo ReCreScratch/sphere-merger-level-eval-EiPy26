@@ -11,7 +11,7 @@ import deal
 
 from sphere_merger.agents.base import Agent
 from sphere_merger.game.level import LevelDefinition
-from sphere_merger.game.round import RoundState, play_shot, start_round, touched_sphere_indices
+from sphere_merger.game.round import play_shot, start_round, touched_sphere_indices
 from sphere_merger.physics.engine import enable_native_backend
 
 
@@ -27,14 +27,12 @@ def disable_contracts_in_worker() -> None:
 
 
 def prepare_native_batch_worker() -> None:
-    """Combined `ProcessPoolExecutor` `initializer`: disables `deal`
-    contracts and switches physics to the native Rust backend, both for
-    one worker process.
+    """`ProcessPoolExecutor` `initializer` that disables `deal` contracts
+    *and* switches to the native Rust backend for one worker.
 
     Use instead of `disable_contracts_in_worker` when a batch run should
-    use `physics.engine.native_backend()` (see its docstring for why the
-    switch is process-global and needs its own initializer per worker,
-    same reasoning as `deal`'s).
+    run natively. Both switches are per-process state, so both have to be
+    set inside the worker rather than inherited from the parent.
     """
     disable_contracts_in_worker()
     enable_native_backend()
@@ -44,12 +42,10 @@ def prepare_native_batch_worker() -> None:
 def contracts_disabled() -> Iterator[None]:
     """Turn off `deal` contracts for the duration of the block.
 
-    Scoped to headless batch runs (this module) -- interactive play
-    (`rendering.renderer`) never calls this, so contracts stay on as a
-    correctness net there. `deal`'s switch is process-global (no native
-    scoping), so parallel candidate evaluation in worker processes (see
-    agents' `executor` param) needs its own `deal.disable()` via the
-    executor's `initializer`; this only covers the calling process.
+    Scoped to headless batch runs, where contract checking is measurable
+    overhead; interactive play never calls this and keeps contracts on as
+    a correctness net. Only covers the calling process -- workers need
+    `disable_contracts_in_worker` as their `initializer`.
     """
     deal.disable(warn=False)
     try:
@@ -58,41 +54,24 @@ def contracts_disabled() -> Iterator[None]:
         deal.enable(warn=False)
 
 
-def play_round(level: LevelDefinition, agent: Agent) -> RoundState:
-    """Play `level` from scratch, letting `agent` pick every shot.
-
-    Returns the final `RoundState` once the round is won or the shot queue
-    runs out.
-    """
-    state = start_round(level)
-    with contracts_disabled():
-        while not state.is_over:
-            angle, speed = agent.choose_shot(state)
-            play_shot(state, angle, speed)
-    return state
-
-
 @dataclass(frozen=True)
 class ShotRecord:
-    """One shot's outcome within a `record_playthrough` run: the
-    (angle, speed) fired, the cumulative score right after it settled, and
-    which levels merged as a result (empty if none merged).
+    """One shot's outcome within a `record_playthrough` run.
 
-    `play_shot` already computes all of this; keeping it instead of
-    collapsing it into a single final score/combo means per-shot metrics
-    (score curve, merge cadence, dead shots, ...) can be read off later
-    without a second simulation pass.
+    Holds the (angle, speed) fired, the cumulative score once the field
+    settled, and which levels merged as a result. `play_shot` computes all
+    of it anyway, and keeping it rather than collapsing to a final score
+    means per-shot metrics -- score curve, merge cadence, dead shots --
+    can be read off later without simulating again.
 
-    `spheres_after` is the settled field the shot left behind, as
-    (x, y, level) per sphere. Velocity is dropped because the field is at
-    rest by definition at that point, and the radius follows from the
-    level (`radius_for_level`) -- keeping either would store a constant.
-    It is what makes mid-round positions analysable later ("what does a
-    level look like when a shot is being set up") without replaying the
-    agent, and it is what lets a shorter round be reconstructed from a
-    longer one: the state after shot 1 of a 3-shot round is exactly the
-    state after shot 1 of the 2-shot round on the same seed, so the
-    2-shot answer needs one 1-ply sweep from here rather than a rerun.
+    `spheres_after` is the settled field left behind, as (x, y, level) per
+    sphere. Velocity is dropped because the field is at rest by
+    definition, and radius follows from the level, so storing either would
+    store a constant. It makes mid-round positions analysable without
+    replaying the agent, and lets a shorter round be reconstructed from a
+    longer one: the state after shot 1 is the same on the same seed
+    whatever the queue length, so a 2-shot answer costs one 1-ply sweep
+    from here instead of a full rerun.
     """
 
     angle: float
@@ -105,11 +84,10 @@ class ShotRecord:
 def record_playthrough(level: LevelDefinition, agent: Agent) -> list[ShotRecord]:
     """Play `level` with `agent`, recording every shot's outcome.
 
-    For replaying a playthrough later (e.g. animated in a rendered grid)
-    without needing the agent -- or its per-shot candidate simulation --
-    live at render time (`shots_of`), and for reading off summary stats
-    (`final_score`, `max_combo`) or per-shot ones directly from the
-    records without re-simulating.
+    Lets a playthrough be replayed later (`shots_of`) without the agent or
+    its expensive candidate search present at render time, and lets
+    summary stats (`final_score`, `max_combo`) be read straight off the
+    records instead of re-simulating.
     """
     state = start_round(level)
     records: list[ShotRecord] = []
@@ -130,8 +108,7 @@ def record_playthrough(level: LevelDefinition, agent: Agent) -> list[ShotRecord]
 
 
 def shots_of(records: list[ShotRecord]) -> list[tuple[float, float]]:
-    """Just the (angle, speed) shots from `record_playthrough`'s result --
-    e.g. for replaying without the per-shot metrics."""
+    """Just the (angle, speed) shots, for replaying without the metrics."""
     return [(record.angle, record.speed) for record in records]
 
 
@@ -141,32 +118,27 @@ def final_score(records: list[ShotRecord]) -> int:
 
 
 def max_combo(records: list[ShotRecord]) -> int:
-    """The longest single-shot merge chain in `records` (0 if there were
-    none, or none merged anything) -- a proxy for "did any one shot set
-    off a big cascade"."""
+    """Longest single-shot merge chain in `records`, 0 if nothing merged.
+
+    A proxy for whether any one shot set off a big cascade.
+    """
     return max((len(record.merged_levels) for record in records), default=0)
-
-
-def record_shots(level: LevelDefinition, agent: Agent) -> list[tuple[float, float]]:
-    """Like `record_playthrough`, but for callers that only need the shots."""
-    return shots_of(record_playthrough(level, agent))
 
 
 Playthrough = tuple[list[tuple[float, float]], int, int]
 """shots, score, longest combo chain -- `shrink_to_used_spheres`'s summary
-of one `record_playthrough` run, e.g. as reconstructed from a prior batch
-run's saved scores rather than a live `list[ShotRecord]`."""
+of one playthrough, thin enough to rebuild from a batch run's saved
+scores instead of a live `list[ShotRecord]`."""
 
 
 @dataclass(frozen=True)
 class ShrinkResult:
     """`shrink_to_used_spheres`'s return value.
 
-    Carries the iterated agents' playthroughs the shrink already recorded
-    internally (`original_iterated_playthroughs`/`final_iterated_playthroughs`,
-    before vs. after shrinking) so callers wanting before/after scores don't
-    need to re-simulate them. `fixed_playthroughs` isn't echoed back here --
-    the caller already had those (see `shrink_to_used_spheres`).
+    Carries the iterated agents' playthroughs from before and after
+    shrinking, which the shrink recorded internally anyway, so a caller
+    wanting before/after scores need not re-simulate them.
+    `fixed_playthroughs` is not echoed back -- the caller passed it in.
     """
 
     level: LevelDefinition
@@ -182,21 +154,19 @@ def shrink_to_used_spheres(
     """Iteratively drop initial spheres that none of `iterated_agents` ever
     touch, nor any of `fixed_playthroughs`.
 
-    `iterated_agents` are cheap agents (e.g. greedy) that get re-simulated
-    fresh every removal pass, since dropping a sphere can change which
-    shots they pick on the smaller field -- a touched-set computed before
-    the drop can't be trusted for what comes after (see
-    docs/level_shrinking.md). `fixed_playthroughs` are already-recorded
-    `record_playthrough` results *on `level`, unmodified* for expensive
-    agents (e.g. lookahead's near-exhaustive 2-ply search) -- passed in
-    rather than re-simulated here, since a caller processing many levels
-    from a prior batch run (see `long_run.py`) already has these
-    shots and re-running the search again would repeat its most expensive
-    part for nothing. Their touched set is carried forward across removal
-    passes (remapped through the index shifts each drop causes) instead of
-    being recomputed every time, trading the small risk of missing a
-    sphere that only becomes newly safe to drop after several rounds of
-    `iterated_agents`-driven shrinking for a large speed win.
+    `iterated_agents` are cheap ones (greedy) that get re-simulated fresh
+    on every removal pass: dropping a sphere can change which shots they
+    pick on the smaller field, so a touched set computed before the drop
+    says nothing about after (see docs/level_shrinking.md).
+
+    `fixed_playthroughs` are already-recorded results on the *unmodified*
+    `level`, for agents too expensive to redo -- lookahead's 2-ply search
+    above all. A caller working through a batch run already has them, and
+    re-running the search would repeat its costliest part for nothing.
+    Their touched set is carried forward across passes, remapped through
+    the index shifts each drop causes. That trades the small chance of
+    missing a sphere that only becomes droppable after several passes for
+    a large speed win.
 
     Keeps going until a pass finds nothing left to drop. Doesn't check
     whether the score gap changed at all: a shrinking gap here just means

@@ -28,14 +28,11 @@ def _candidate_gain(args: tuple[RoundState, float, float]) -> tuple[float, int]:
 class GreedyAgent:
     """Sweeps candidate angles at a fixed speed, picks the best immediate gain.
 
-    If several candidates tie on immediate gain, they're not resolved
-    arbitrarily by sweep order: each tied candidate is checked one shot
-    further (its own gain plus the best next-shot gain reachable from it,
-    same criterion `LookaheadAgent` ranks by) and the best of those wins.
-    This never sacrifices any immediate score for a better future -- unlike
-    `LookaheadAgent`, ties are the only thing it looks beyond this shot for
-    -- it just stops picking blindly among options that score the same
-    right now.
+    Ties are not broken by sweep order. Each tied candidate is instead
+    checked one shot further, by the same criterion `LookaheadAgent` ranks
+    by, and the best of those wins. This never trades immediate score for
+    a better future -- ties are the only thing it looks past this shot
+    for; it just stops choosing blindly between equally scoring options.
     """
 
     def __init__(
@@ -45,11 +42,10 @@ class GreedyAgent:
         speed: float = DEFAULT_SPEED,
         executor: Executor | None = None,
     ) -> None:
-        """`executor`, if given, evaluates candidate angles across its
-        worker processes instead of sequentially in the caller -- each
-        candidate is an independent simulation, so this only speeds things
-        up, it never changes the result. The caller owns the executor's
-        lifecycle (create/shut it down itself).
+        """`executor`, if given, spreads the candidate simulations over
+        worker processes instead of running them in the caller. Candidates
+        are independent, so this only affects speed, never the result. The
+        caller owns the executor's lifecycle.
         """
         self._angles = candidate_angles(angle_range, angle_step)
         self._speed = speed

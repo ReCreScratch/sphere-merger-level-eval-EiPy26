@@ -1,11 +1,11 @@
 """Per-level metrics derived from one batch run's saved records (see
 `scripts/long_run.py` and docs/data_schema.md).
 
-Pure derivation, no simulation: every number here is read off the scores
-and per-shot data a batch run already wrote out. The point is to turn
-"what did the agents score" into "what kind of level is this for a
-human" -- see docs/interesting_levels.md for what each dimension is
-supposed to capture and where the approach stops working.
+Pure derivation, no simulation: every number is read off the scores and
+per-shot data a batch run already wrote out. The point is to turn "what
+did the agents score" into "what kind of level is this for a human".
+Each function below documents the dimension it captures and where it
+stops being meaningful.
 """
 
 from __future__ import annotations
@@ -87,10 +87,12 @@ class LevelMetrics:
     Attributes:
         seed: The level's seed -- enough to rebuild it, given the run's `meta`.
         depth_gap: `lookahead_score - greedy_score`, signed rather than
-            absolute: at `shot_count=2` lookahead's 2-ply search is
-            effectively optimal, so this is what the obvious move gives up
-            against the best one, and it is never negative in practice
-            (checked: 0 of 2000 levels).
+            absolute. At `shot_count=2` a 2-ply search reaches the end of
+            the round, so this is exactly what the obvious move gives up
+            against the best one, and it was never negative across 12000+
+            such levels. Beyond 2 shots the search no longer reaches the
+            end and the value stops being an optimality statement: 9-10%
+            of 3- and 4-shot levels come out negative.
         payoff_conc: See `payoff_concentration`, for lookahead's playthrough.
         random_mean: Mean of the random baseline samples.
         random_std: Population standard deviation of those samples.
