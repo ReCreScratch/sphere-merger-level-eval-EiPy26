@@ -21,3 +21,13 @@ build/
 data/checkpoints/
 data/long_run.log
 data/STOP
+
+# Rohdaten der grossen Laeufe bleiben lokal: die neun Regime des langen
+# Laufs plus die fm-Regime sind zusammen ~400 MB, einzelne Dateien bis
+# 82 MB (GitHub warnt ab 50 MB, blockt ab 100 MB). Fuer den Bericht zaehlt
+# die reduzierte data/dashboard_data.json, nicht die Rohsaetze.
+# Wirkt nur auf Neues -- die bereits getrackten kleinen Laeufe (5b, 8b,
+# 6b_3s) bleiben im Repo und weiterhin versionierbar.
+data/*.json
+data/*.log
+data/long_run_status.html
