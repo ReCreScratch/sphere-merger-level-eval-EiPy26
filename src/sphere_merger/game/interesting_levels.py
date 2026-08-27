@@ -10,10 +10,9 @@ level needs only its seed plus `meta`: `generate_random_level` is
 deterministic.
 
 `RUNS` below is the one place that says which batch runs exist. Every
-script that produces or reads a run's files (`agent_batch_timing.py`,
-`shrink_top_levels.py`, `build_dashboard_data.py`,
-`browse_batch_shrink.py`) iterates it instead of keeping its own copy of
-the parameters.
+script that produces or reads a run's files (`long_run.py`,
+`build_dashboard_data.py`, `browse_interesting_levels.py`) iterates it
+instead of keeping its own copy of the parameters.
 """
 
 from __future__ import annotations
@@ -68,12 +67,12 @@ class RunConfig:
 
     @property
     def interesting_path(self) -> Path:
-        """Where `agent_batch_timing.py` writes this run's raw records."""
+        """Where `long_run.py` writes this run's raw records."""
         return DATA_DIR / f"interesting_levels_{self.name}.json"
 
     @property
     def shrunk_path(self) -> Path:
-        """Where `shrink_top_levels.py` writes this run's shrink results."""
+        """Where `long_run.py` writes this run's shrink results."""
         return DATA_DIR / f"shrunk_levels_{self.name}.json"
 
 

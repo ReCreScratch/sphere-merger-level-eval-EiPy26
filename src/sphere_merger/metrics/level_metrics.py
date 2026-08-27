@@ -1,5 +1,5 @@
 """Per-level metrics derived from one batch run's saved records (see
-`scripts/agent_batch_timing.py` and docs/data_schema.md).
+`scripts/long_run.py` and docs/data_schema.md).
 
 Pure derivation, no simulation: every number here is read off the scores
 and per-shot data a batch run already wrote out. The point is to turn
@@ -116,7 +116,7 @@ class LevelMetrics:
     def from_record(cls, record: dict[str, Any]) -> LevelMetrics:
         """Derive metrics from one saved `levels[]` entry.
 
-        Expects the schema `scripts/agent_batch_timing.py` writes (see
+        Expects the schema `scripts/long_run.py` writes (see
         docs/data_schema.md) -- notably `random_scores` and
         `lookahead_score_per_shot`, both added after the first batch runs,
         so older files will not work here.

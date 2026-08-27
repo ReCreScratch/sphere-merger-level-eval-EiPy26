@@ -1,8 +1,8 @@
 """Manual demo: play a specific batch-run seed yourself, live, no agent
 pre-simulation involved -- same generation parameters as
-scripts/agent_batch_timing.py, so it's the exact same level agents 44/49
-etc. were evaluated on. Click-drag to aim/shoot; wait for the field to
-settle before the next drag is accepted. Reset restarts the same level.
+scripts/long_run.py, so it's the exact same level the agents were
+evaluated on. Click-drag to aim/shoot; wait for the field to settle
+before the next drag is accepted. Reset restarts the same level.
 """
 
 from sphere_merger.game.level import generate_random_level

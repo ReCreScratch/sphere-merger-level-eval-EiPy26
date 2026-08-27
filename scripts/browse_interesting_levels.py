@@ -18,8 +18,8 @@ readable without cross-referencing the data.
 Command-line argument selects the run (`... browse_interesting_levels.py
 8b`); default is the newest entry in `RUNS`.
 
-Pure data loading, no agents/executor needed -- shrink_top_levels.py
-already recorded everything a replay needs.
+Pure data loading, no agents/executor needed -- long_run.py already
+recorded everything a replay needs.
 """
 
 from __future__ import annotations

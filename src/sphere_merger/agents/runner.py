@@ -190,7 +190,7 @@ def shrink_to_used_spheres(
     `record_playthrough` results *on `level`, unmodified* for expensive
     agents (e.g. lookahead's near-exhaustive 2-ply search) -- passed in
     rather than re-simulated here, since a caller processing many levels
-    from a prior batch run (see `agent_batch_timing.py`) already has these
+    from a prior batch run (see `long_run.py`) already has these
     shots and re-running the search again would repeat its most expensive
     part for nothing. Their touched set is carried forward across removal
     passes (remapped through the index shifts each drop causes) instead of

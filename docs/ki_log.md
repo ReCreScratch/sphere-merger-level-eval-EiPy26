@@ -415,3 +415,47 @@ abgewichen.
   beguenstigt.
 - Tag `vor-reduktion` vor dem ersten Schnitt gesetzt, damit jeder
   entfernte Teil mit einem Befehl zurueckholbar ist.
+- **Skripte durchgesehen und von 12 auf 8 reduziert** (1996 -> 1403
+  Zeilen). Statt zu raten, welche ueberholt sind, wurden sie nach
+  Pipeline-Stellung sortiert (Erhebung / Auswertung / Ansicht / manuell /
+  Messung) -- daraus fiel die Redundanz von selbst heraus:
+  `long_run.py` deckt `agent_batch_timing.py` funktional vollstaendig ab
+  (gleiches `select_runs`-CLI, gleicher `interesting_path`) und shrinkt
+  zusaetzlich inline mit, womit auch `shrink_top_levels.py` (der
+  Nachlauf-Shrinker) seinen Zweck verliert. `demo_render.py` erklaerte
+  sich im eigenen Docstring als veraltet ("No real level generation yet
+  -- that's a later milestone", laengst erledigt), `demo_round.py` ist
+  eine schwaechere Variante von `play_seed.py` (Zufallslevel statt eines
+  echten Lauf-Seeds).
+- Die drei Browse-Skripte teilen sich `level_compare` und `_build_entry`
+  und unterscheiden sich nur in der Seed-Kuratierung (Kategorien je
+  Regime / fm-Kollaps / Gap ueber alle Regime). Zusammenlegen auf ein
+  Skript mit `--mode` waere moeglich (~200 Zeilen Duplikat), wurde aber
+  auf Nutzerentscheidung verworfen: es ist genau der Screen, auf dem
+  weitergearbeitet werden soll, und ein Umbau daran kostet Zeit ohne
+  Erkenntnisgewinn.
+- Beim Loeschen kamen zwei Dinge hoch, die vorher nicht sichtbar waren.
+  Erstens zitierten **fuenf Kern-Docstrings** `agent_batch_timing.py` /
+  `shrink_top_levels.py` als Schema-Quelle (`interesting_levels.py`,
+  `level_metrics.py`, `runner.py`) -- reine Prosa, aber ein Verweis auf
+  eine geloeschte Datei genau in den Dateien, die als naechstes gelesen
+  werden sollen. Auf Nutzerentscheidung angepasst (kein Verhalten
+  beruehrt, Tests/mypy unveraendert). Zweitens tragen die getrackten
+  Datendateien `"agent_batch_timing.py[rust]"` bzw. `"shrink_top_levels.py"`
+  im `source_script`-Feld: die geloeschten Skripte leben als
+  Herkunftsangabe in den Daten weiter, weshalb `docs/data_schema.md`
+  jetzt **beide** Werte dokumentiert statt den alten zu ersetzen -- die
+  Dateien sind unveraendert gueltig und werden weiter gelesen.
+- Trennung beim Nachziehen der Dokumentation: `docs/data_schema.md` ist
+  ein *lebendes* Dokument (haelt sich laut eigener Vorgabe am Code) und
+  wurde aktualisiert; `ki_log.md`, `level_shrinking.md` und
+  `physics_optimizations.md` sind *datierte Verlaufsprotokolle* und
+  blieben unangetastet -- sie beschreiben, was zu jenem Zeitpunkt galt,
+  und nachtraeglich umzuschreiben wuerde ihren Zweck zerstoeren.
+- `play_seed.py`s Docstring behauptet jetzt "gleiche Parameter wie
+  long_run.py". Vor dem Schreiben geprueft statt behauptet: `FIELD`,
+  `SPAWN_MARGIN`, `SPAWN` und `LEVEL_RANGE = (0, 2)` stimmen ueberein,
+  6 Kugeln / 3 Schuesse ist das Regime `6b_3s` aus `RUNS`.
+- Stand nach beiden Schnitten: 129 Tests gruen, ruff/format/mypy sauber,
+  interrogate 81.6 % (ueber dem Nice-to-have von 80 %), alle 8
+  verbliebenen Skripte importieren fehlerfrei, keine toten Verweise mehr.

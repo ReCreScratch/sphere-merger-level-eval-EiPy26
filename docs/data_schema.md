@@ -1,11 +1,18 @@
 # Datenschema: `data/*.json`
 
 **Muss aktuell gehalten werden.** Sobald sich ein `save_run(...)`-Aufruf in
-`scripts/agent_batch_timing.py` oder `scripts/shrink_top_levels.py` ändert
-(Feld hinzugefügt/entfernt/umbenannt), dieses Dokument im selben Commit
-nachziehen -- nicht aus dem Gedächtnis, sondern durch erneutes Lesen des
-tatsächlichen `save_run(meta=..., levels=[...])`-Aufrufs im Code. Stand:
-2026-08-06, verifiziert gegen den Code zu diesem Zeitpunkt.
+`scripts/long_run.py` ändert (Feld hinzugefügt/entfernt/umbenannt), dieses
+Dokument im selben Commit nachziehen -- nicht aus dem Gedächtnis, sondern
+durch erneutes Lesen des tatsächlichen
+`save_run(meta=..., levels=[...])`-Aufrufs im Code. Stand: 2026-08-27,
+verifiziert gegen den Code zu diesem Zeitpunkt.
+
+`long_run.py` ist seit 2026-08-27 der einzige Produzent. Vorher schrieben
+`agent_batch_timing.py` (Rohdaten) und `shrink_top_levels.py` (Shrink) --
+beide entfernt, weil `long_run.py` beides in einem Durchlauf erledigt.
+Ihre Namen stehen aber weiterhin im `source_script`-Feld der damals
+erzeugten Dateien, die unverändert gültig und lesbar sind; genau dafür
+gibt es das Feld.
 
 Beide Dateifamilien nutzen `game/interesting_levels.py`s generisches
 `{"meta": ..., "levels": [...]}`-Format: `meta` einmal pro Datei (geteilte
@@ -52,29 +59,31 @@ Untergrenze, keine echte Erreichbarkeits-Quote.
 Die Level-Zahlen von `8b`/`5b`/`10b_2s`/`5b_3s`/`8b_3s`/`10b_3s`/`5b_4s`/
 `8b_4s`/`10b_4s` stammen aus einem `scripts/long_run.py`-Lauf
 (2026-08-05, ~7.6h, siehe `docs/ki_log.md`) und sind größer als die
-1000-Level-Stichproben von `agent_batch_timing.py` üblich sind -- ein
-späterer erneuter `long_run.py`-Lauf verändert diese Zahlen. Die
-`data/*.json`-Dateien selbst liegen nicht im Repo (zu groß, ~200 MB);
-nur der Code, mit dem sie erzeugt wurden, ist versioniert.
+1000-Level-Stichproben der früheren Einzelläufe -- ein späterer erneuter
+`long_run.py`-Lauf verändert diese Zahlen. Von den Datendateien liegen
+nur die kleinen frühen Läufe (`5b`, `8b`, `6b_3s`, je ~1 MB) plus
+`dashboard_data.json` im Repo; die Rohdaten des langen Laufs und der
+fm-Regime bleiben lokal (~400 MB, einzelne Dateien bis 82 MB) und sind
+per `.gitignore` ausgeschlossen.
 
 `name` ist der Dateiname-Stamm und lautet standardmäßig `<n>b_<s>s`. Die
 ersten beiden Läufe stammen aus der Zeit, als die Schusszahl noch fix 2
 war, und sind per `slug` auf ihre ursprünglichen Namen festgenagelt --
 Umbenennen hätte nur Diff erzeugt.
 
-Die erzeugenden Skripte nehmen diese Namen als Kommandozeilenargumente
-(`python scripts/agent_batch_timing.py 6b_3s`), um einen einzelnen Lauf
-zu wiederholen. **Ohne Argument laufen alle** -- und da `save_run` die
-Zieldatei ersetzt und frische Seeds zieht, verwirft das die vorhandenen
-Ergebnisse der anderen Regimes.
+Die erzeugenden und lesenden Skripte nehmen diese Namen als
+Kommandozeilenargumente (`python scripts/long_run.py 6b_3s`), um einen
+einzelnen Lauf zu wiederholen. **Ohne Argument laufen alle** -- und da
+`save_run` die Zieldatei ersetzt und frische Seeds zieht, verwirft das die
+vorhandenen Ergebnisse der anderen Regimes.
 
-## `data/interesting_levels_<name>.json` (agent_batch_timing.py)
+## `data/interesting_levels_<name>.json` (long_run.py)
 
 ### `meta`
 
 | Feld | Typ | Bedeutung |
 |---|---|---|
-| `source_script` | str | z.B. `"agent_batch_timing.py[rust]"` |
+| `source_script` | str | `"long_run.py[rust]"`; ältere Dateien: `"agent_batch_timing.py[rust]"` |
 | `field` | dict | `x_min`/`x_max`/`y_min`/`y_max` des Spielfelds |
 | `spawn_margin` | float | Abstand Spawn-Position von Feldrand |
 | `target_score` | int | aktuell fix `999` (kein echtes Sieg-Kriterium bisher) |
@@ -138,16 +147,19 @@ gespeicherten Zustand nach Schuss 1 kostet die echte 2-Schuss-Lösung
 aber nur noch einen 1-Ply-Sweep (~91 Simulationen statt ~8400), also
 etwa 1 % eines Levels.
 
-## `data/shrunk_levels_<name>.json` (shrink_top_levels.py)
+## `data/shrunk_levels_<name>.json` (long_run.py)
 
-Liest die passende `interesting_levels_<name>.json`, shrinkt **alle**
-Level darin (kein Top-N-Ausschnitt), schreibt hierhin.
+Enthält **alle** Level des zugehörigen Laufs (kein Top-N-Ausschnitt).
+`long_run.py` shrinkt jedes Level direkt neben dem Level, zu dem es
+gehört, sodass beide Datensätze nie auseinanderlaufen; die älteren
+Dateien entstanden stattdessen in einem eigenen Nachlauf über die fertige
+`interesting_levels_<name>.json`.
 
 ### `meta`
 
 | Feld | Typ | Bedeutung |
 |---|---|---|
-| `source_script` | str | `"shrink_top_levels.py"` |
+| `source_script` | str | `"long_run.py[shrink]"`; ältere Dateien: `"shrink_top_levels.py"` |
 | `shrunk_from` | str | Pfad der Quelldatei |
 | `field`, `spawn_margin`, `target_score`, `initial_sphere_count`, `shot_count`, `level_range`, `shot_speed` | wie oben | aus den `_build_level`-Konstanten des Skripts, nicht aus der Quelldatei kopiert |
 

@@ -1,8 +1,11 @@
 """Long unattended batch run across several regimes at once, abortable at
 any moment without losing what it has already computed.
 
-Four differences to `agent_batch_timing.py`, all of them consequences of
-running for hours rather than minutes:
+This is the only batch producer left; an earlier, simpler one
+(`agent_batch_timing.py`, removed) ran a single regime in the foreground
+with a pygame progress bar and left shrinking to a separate pass. Four
+properties distinguish this one, all of them consequences of running for
+hours rather than minutes:
 
 **One worker task is one whole level, not one candidate angle.** An
 earlier version of this script fanned a single level's candidate sweeps
@@ -341,7 +344,8 @@ def shrink_record(
     lookahead: list[ShotRecord],
 ) -> dict[str, object]:
     """One level's shrink result, reusing lookahead's recorded playthrough
-    instead of re-running its 2-ply search (see shrink_top_levels.py)."""
+    instead of re-running its 2-ply search (see
+    `agents.runner.shrink_to_used_spheres`'s `fixed_playthroughs`)."""
     result = shrink_to_used_spheres(
         level,
         iterated_agents=[greedy_agent],
