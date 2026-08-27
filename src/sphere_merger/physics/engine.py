@@ -18,41 +18,27 @@ from sphere_merger.physics.collision import (
 from sphere_merger.physics.sphere import Sphere
 from sphere_merger.physics.vector import Vector2
 
-# Purely a broad-phase optimization (skip the O(n^2) scan for pairs that are
-# both exactly stationary, see find_colliding_pairs) -- not a physical
-# "resting band" like the old gravity model needed. Without gravity nothing
-# re-drives a settled sphere's velocity away from exactly zero, so a tiny
-# fixed epsilon (float noise only) is all that's needed here.
+# Broad-phase optimization only (see find_colliding_pairs), not a physical
+# resting band: nothing re-drives a settled sphere away from zero velocity,
+# so this only has to cover float noise.
 _MOVING_EPSILON = 1e-9
 
+# Which backend `step` routes through. Process-wide rather than a
+# parameter, because the flag cannot cross process boundaries anyway:
+# workers set it themselves via a ProcessPoolExecutor initializer (see
+# agents.runner.prepare_native_batch_worker).
 _active_backend = "python"
 
 
 def enable_native_backend() -> None:
-    """Route `step` through the native Rust extension (`sphere_merger_native`,
-    see `native/sphere_merger_native/` and README.md) for the rest of this
-    process, permanently.
-
-    Global (process-wide) switch rather than a parameter threaded through
-    every caller (`advance_physics`, `play_shot`, `simulate_shot`, agents,
-    runner...) -- mirrors `agents.runner.disable_contracts_in_worker`'s
-    pattern, meant to be used the same way (as a `ProcessPoolExecutor`
-    `initializer`, see `agents.runner.prepare_native_batch_worker`) since
-    the flag doesn't cross process boundaries either. For the calling
-    process itself, prefer the scoped `native_backend()` context manager.
-    """
+    """Switch this process to the native Rust backend permanently."""
     global _active_backend
     _active_backend = "rust"
 
 
 @contextmanager
 def native_backend() -> Iterator[None]:
-    """Route `step` through the native Rust extension for the duration of
-    the block, then restore whatever backend was active before.
-
-    See `enable_native_backend` for why this is a global switch, not a
-    parameter.
-    """
+    """Use the native Rust backend for this block, then restore the previous one."""
     global _active_backend
     previous = _active_backend
     _active_backend = "rust"
@@ -63,30 +49,21 @@ def native_backend() -> Iterator[None]:
 
 
 def current_backend() -> str:
-    """`"python"` or `"rust"` -- whichever backend `step` (and callers that
-    check this themselves, e.g. `agents.base.simulate_shot`'s own native
-    fast path) currently route through.
-    """
+    """`"python"` or `"rust"`, for callers with their own native fast path."""
     return _active_backend
 
 
 @dataclass
 class PhysicsConfig:
-    """Tunable physics parameters, exposed for a future settings menu.
+    """Tunable physics parameters.
 
     Attributes:
-        friction: Fraction of speed removed per step (table drag) -- every
-            sphere, every step, regardless of contact state (0 = frictionless
-            ice, 1 = stops dead immediately). Replaces the old "only while
-            resting on the floor" special case from the 3D/gravity model --
-            there's no floor here, everything is always "on the table".
-        sphere_restitution: Elasticity of sphere-sphere collisions (0 = fully
-            inelastic, spheres stick to their post-collision velocity with no
-            bounce-back; 1 = fully elastic, no kinetic energy lost).
-        boundary_restitution: Elasticity of contact with the field walls.
-            At 1.0 a wall is a perfect reflector and a sphere bounces forever
-            at the same speed; values below 1 lose energy on every bounce
-            until the sphere settles.
+        friction: Fraction of speed removed from every sphere every step
+            (0 = frictionless, 1 = stops dead immediately).
+        sphere_restitution: Elasticity of sphere-sphere collisions
+            (0 = no bounce-back, 1 = no kinetic energy lost).
+        boundary_restitution: Elasticity of contact with the walls. Below
+            1 every bounce loses energy until the sphere settles.
     """
 
     friction: float = 0.0175
@@ -104,16 +81,15 @@ def step(
 ) -> None:
     """Advance all `spheres` by one time step `dt`, mutating them in place.
 
-    Fixed, deterministic order: integration -> friction -> boundary contact
-    -> pairwise sphere collisions (velocity solver, then overlap solver) --
+    Fixed, deterministic order: integration -> friction -> boundary
+    contact -> pairwise collisions (velocity solver, then overlap solver),
     always in `spheres` list order.
 
-    `collision_filter`, if given, is checked for every colliding pair before
-    resolving it; pairs for which it returns `False` are left exactly as
-    found (no bounce, no overlap correction). This lets callers outside the
-    physics layer take over specific pairs themselves -- e.g. the game loop
-    handling same-level spheres as a merge instead of a bounce -- without
-    the physics engine needing to know why.
+    `collision_filter`, if given, is asked about every colliding pair
+    before it is resolved; pairs it rejects are left exactly as found, with
+    neither bounce nor overlap correction. That lets a caller outside the
+    physics layer claim specific pairs for itself -- the game loop merges
+    same-level spheres this way -- without the engine knowing why.
     """
     if config is None:
         config = PhysicsConfig()
@@ -143,14 +119,12 @@ def _step_native(
     config: PhysicsConfig,
     collision_filter: Callable[[Sphere, Sphere], bool] | None,
 ) -> None:
-    """`step`'s native-backend branch, active while `native_backend()` (or
-    `enable_native_backend()`) is in effect.
+    """`step`'s native-backend branch.
 
-    `collision_filter` can't cross the FFI boundary as an arbitrary Python
-    callable, so it's collapsed to a bool: non-`None` is assumed to mean
-    "exclude same-level pairs", the only filter `game.round.advance_physics`
-    (the sole caller that ever passes one) uses. A genuinely different
-    filter would silently misbehave under this backend.
+    `collision_filter` cannot cross the FFI boundary as a Python callable,
+    so it collapses to a bool: non-`None` is taken to mean "exclude
+    same-level pairs", the only filter any caller passes. **A different
+    filter would silently misbehave under this backend.**
     """
     import sphere_merger_native
 
@@ -171,13 +145,11 @@ def _step_native(
 def _resolve_velocity(a: Sphere, b: Sphere, restitution: float) -> None:
     """Impulse-based collision response along the contact normal.
 
-    Tangential velocity is left untouched (no spin/friction in collisions).
-    No mass concept (see `Sphere`'s docstring), so this is the standard
-    equal-mass impulse formula, split evenly between both spheres. No
-    "resting contact" special case here (unlike the old 3D/gravity model):
-    without gravity, nothing continuously re-drives two touching spheres
-    back together, so a normal restitution-scaled bounce simply loses
-    energy each time and settles on its own.
+    The standard equal-mass impulse formula, split evenly (no mass, see
+    `Sphere`). Tangential velocity is left untouched -- no spin, no
+    friction in collisions. Pairs already moving apart are ignored, so a
+    restitution-scaled bounce loses energy each time and settles without
+    needing a resting-contact special case.
     """
     normal = contact_normal(a, b)
 

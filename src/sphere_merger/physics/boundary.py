@@ -27,14 +27,13 @@ class Boundary:
 def resolve_boundary(sphere: Sphere, boundary: Boundary, restitution: float) -> None:
     """Clamp `sphere` inside `boundary`, reflecting velocity on contact.
 
-    Every wall is treated the same way: if the sphere's surface would cross a
-    bound, its position is clamped to that bound and the perpendicular
-    velocity component is reflected, scaled by `restitution`. Unlike the old
-    3D/gravity model, there's no separate "resting" case to worry about here:
-    with no continuous external force pushing a sphere back into a wall every
-    step, a bounce that loses energy (`restitution < 1`) simply decays away
-    on its own instead of needing a special-cased threshold to stop it from
-    jittering forever.
+    Every wall is treated the same way: if the sphere's surface would cross
+    a bound, its position is clamped to that bound and the perpendicular
+    velocity component is reflected, scaled by `restitution`.
+
+    No special "resting" case is needed. Nothing pushes a sphere back into
+    a wall between steps, so with `restitution < 1` a bounce loses energy
+    and decays to a standstill on its own.
 
     >>> s = Sphere(Vector2(4.6, 0.0), Vector2(1.0, 0.0), radius=0.5, level=0)
     >>> b = Boundary(x_min=-5.0, x_max=5.0, y_min=-5.0, y_max=5.0)

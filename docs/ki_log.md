@@ -459,3 +459,35 @@ abgewichen.
 - Stand nach beiden Schnitten: 129 Tests gruen, ruff/format/mypy sauber,
   interrogate 81.6 % (ueber dem Nice-to-have von 80 %), alle 8
   verbliebenen Skripte importieren fehlerfrei, keine toten Verweise mehr.
+- **Docstrings im Kern gekuerzt, beginnend mit `physics/`.** Messung
+  vorab: der Kern hat mehr Docstring- als Code-Zeilen (1023 zu 1005).
+  Groesster streichbarer Posten ist historische Rechtfertigung -- Saetze
+  wie "unlike the old 3D/gravity model" oder "replaces the old 'only
+  while resting on the floor' special case" erklaeren Code, der seit
+  Commit `96a4d0c` nicht mehr existiert. Das gehoert in Git-Historie und
+  `docs/`, nicht in einen Docstring. Erhalten bleiben Zweck, Kontrakt,
+  nicht-offensichtliches *aktuelles* Verhalten und **alle Doctests** (die
+  sind Tests und laufen ueber `--doctest-modules` mit).
+- Kuerzen ist bei `interrogate` gratis: das Werkzeug zaehlt das
+  *Vorhandensein* eines Docstrings, nicht seine Laenge -- 81.6 % blieben
+  exakt gleich.
+- Als Nachweis statt Behauptung, dass sich das Verhalten nicht aendert,
+  ein kleines Werkzeug gebaut: AST parsen, alle Docstrings entfernen,
+  `ast.dump` hashen. Gleicher Fingerabdruck vor und nach der Aenderung =
+  ausfuehrbarer Code beweisbar identisch. Zweite Schranke gegen einen
+  versehentlich geloeschten Doctest ist die Testzahl (129 muss 129
+  bleiben), denn ein entfernter Doctest wuerde vom AST-Vergleich nicht
+  erfasst -- er steckt ja im Docstring.
+- Ergebnis fuer `physics/`: 430 -> 402 Zeilen (-7 %), Docstrings -19 %,
+  praktisch alles davon in `engine.py` (190 -> 162, Docstrings -42 %).
+  Die Schaetzung vorab lautete "-90 Zeilen" und war deutlich zu
+  optimistisch. Grund: `physics/` ist mit 32-45 % Doc-Anteil der
+  *schlankste* Teil des Kerns; die Masse sitzt in `game/` und `metrics/`
+  (47-64 %, Extremfall `scoring.py` mit 2 Zeilen Code zu 18 Zeilen
+  Docstring). Als Startpunkt wurde `physics/` gewaehlt, weil es gerade
+  gemeinsam durchgegangen worden war -- nicht, weil dort am meisten zu
+  holen war.
+- Bei der Gelegenheit zwei tote oeffentliche Funktionen gefunden, die
+  nirgends aufgerufen werden: `agents/runner.py::play_round` und
+  `::record_shots` (letztere nur noch in einem Docstring *erwaehnt*).
+  Entfernung steht aus, kommt in der `agents/`-Runde.

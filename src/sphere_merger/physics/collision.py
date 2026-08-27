@@ -28,9 +28,9 @@ def distance(a: Sphere, b: Sphere) -> float:
 def is_colliding(a: Sphere, b: Sphere) -> bool:
     """Whether two spheres overlap.
 
-    Compares squared distances (no `Vector2`/sqrt) since this runs in the
-    O(n^2) broad-phase scan over every sphere pair each step -- see
-    scripts/stress_benchmark.py, where this was the dominant cost.
+    Compares squared distances, avoiding a `Vector2` allocation and a
+    `sqrt`: profiling found this the dominant cost of the whole
+    simulation, since it runs for every sphere pair on every step.
     """
     dx = a.position.x - b.position.x
     dy = a.position.y - b.position.y
@@ -43,18 +43,17 @@ def find_colliding_pairs(
 ) -> list[tuple[int, int]]:
     """Return index pairs (i, j), i < j, of overlapping spheres in `spheres`.
 
-    Pairs are found via a fixed nested loop over list indices, so the result
-    depends only on the order of `spheres`, never on set/dict iteration order.
+    A fixed nested loop over list indices, so the result depends only on
+    the order of `spheres` and never on set/dict iteration order. This
+    O(n^2) scan runs every physics step and is the dominant simulation
+    cost.
 
-    A pair is skipped without checking `is_colliding` if *both* spheres are
-    slower than `moving_threshold` (default 0.0 -- every pair is checked,
-    unchanged behavior): two resting spheres can't spontaneously start
-    overlapping on their own, so if neither has moved since it last had a
-    chance to newly overlap something, re-checking it is wasted work. Once a
-    resting sphere is actually disturbed (e.g. hit by a moving one), its own
-    velocity rises above the threshold and it's included again from the very
-    next call. This is the dominant simulation cost (an O(n^2) scan every
-    physics step) per profiling with 5-6 spheres.
+    With `moving_threshold` above 0, a pair is skipped outright if *both*
+    spheres are slower than it, on the assumption that neither can have
+    newly come to overlap anything. Caveat: `resolve_overlap` displaces
+    spheres without giving them velocity, so that assumption does not
+    strictly hold -- a sphere pushed into a resting neighbour yields a
+    pair that is never re-examined. The default of 0.0 checks every pair.
     """
     threshold_squared = moving_threshold * moving_threshold
     moving = [sphere.velocity.dot(sphere.velocity) >= threshold_squared for sphere in spheres]
@@ -71,11 +70,10 @@ def find_colliding_pairs(
 def contact_normal(a: Sphere, b: Sphere) -> Vector2:
     """Exact unit vector from `a` towards `b`.
 
-    Falls back to the relative velocity direction (then a fixed axis) only
-    if the centers exactly coincide (distance zero). No 3D-stack tilt case
-    here (that was specifically for breaking an exactly-vertical gravity
-    equilibrium, which can't arise without gravity/height) -- one normal,
-    used by both the velocity solver and the overlap solver.
+    Used by both the velocity solver and the overlap solver. If the
+    centers exactly coincide there is no direction to derive, so it falls
+    back to the relative velocity, and to a fixed axis if that is zero too
+    -- fixed rather than random, to keep the solver deterministic.
     """
     delta = b.position - a.position
     dist = delta.length()
@@ -91,8 +89,9 @@ def contact_normal(a: Sphere, b: Sphere) -> Vector2:
 def resolve_overlap(a: Sphere, b: Sphere) -> None:
     """Push two overlapping spheres apart along their connecting axis.
 
-    Mutates `a.position` and `b.position` in place. No mass concept (see
-    `Sphere`'s docstring), so the correction is split evenly between both.
+    Mutates both positions in place, splitting the correction evenly (no
+    mass, see `Sphere`). Leaves velocities untouched -- separating the
+    spheres is `_resolve_velocity`'s job.
     """
     normal = contact_normal(a, b)
     overlap = a.radius + b.radius - distance(a, b)

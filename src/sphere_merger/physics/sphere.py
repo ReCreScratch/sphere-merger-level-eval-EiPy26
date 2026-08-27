@@ -11,11 +11,13 @@ from sphere_merger.physics.vector import Vector2
 class Sphere:
     """A single physics body in the simulation.
 
-    No mass: every sphere counts equally in collisions/merges (uniform
-    radius everywhere anyway, see `game.level.radius_for_level`'s
-    docstring) -- so a per-sphere mass would only ever be a constant, not
-    real information. Solvers that used to be mass-weighted (overlap push,
-    collision impulse, merge averaging) are equal-split instead.
+    Has no mass: the radius is uniform across all levels (see
+    `game.level.radius_for_level`), so a per-sphere mass could only ever
+    be a constant. Every solver therefore splits equally between both
+    spheres -- overlap push, collision impulse and merge averaging alike.
+
+    Mutable on purpose: the solvers overwrite `position`/`velocity` in
+    place rather than building new spheres each step.
 
     >>> Sphere(Vector2(0.0, 0.0), Vector2(0.0, 0.0), radius=1.0, level=0).radius
     1.0
