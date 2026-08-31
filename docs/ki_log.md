@@ -587,7 +587,7 @@ abgewichen.
   (einmal pro Lauf, laut CLAUDE.md die Systemgrenze) und nicht in
   `resolve_boundary` (einmal pro Kugel pro Step). `not 0.0 <= v <= 1.0`
   faengt NaN gleich mit, weil jeder NaN-Vergleich falsch ist.
-- Danach: 117 Tests gruen inkl. Parity gegen die neu gebaute Rust-Binary,
+- Danach: 141 Tests gruen inkl. Parity gegen die neu gebaute Rust-Binary,
   ruff/format sauber, mypy unveraendert bei 1 (vorbestehend,
   `tests/game/test_level.py:104`).
 - **Regressionstest nach dem Boundary-Fix, mit Entscheidung.** Statt zu
