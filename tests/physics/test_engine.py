@@ -65,3 +65,10 @@ def test_collision_filter_still_resolves_pairs_it_allows() -> None:
         collision_filter=lambda x, y: True,
     )
     assert (b.position - a.position).length() >= a.radius + b.radius - 1e-6
+
+
+@pytest.mark.parametrize("field", ["friction", "sphere_restitution", "boundary_restitution"])
+@pytest.mark.parametrize("value", [-0.1, 1.5, float("nan")])
+def test_config_rejects_values_outside_unit_interval(field: str, value: float) -> None:
+    with pytest.raises(ValueError, match=field):
+        PhysicsConfig(**{field: value})

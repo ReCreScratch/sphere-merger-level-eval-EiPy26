@@ -580,6 +580,13 @@ abgewichen.
   vergleicht beide Backends. Erst nach `maturin develop --release` ist der
   Parity-Test aussagekraeftig; vorher lief er gegen die alte Binary und
   waere gruen geblieben, ohne die Aenderung je gesehen zu haben.
+- `PhysicsConfig` validiert jetzt `friction`, `sphere_restitution` und
+  `boundary_restitution` auf `[0, 1]`. Vorher haette
+  `boundary_restitution = 1.5` bei jedem Wandkontakt Energie zugefuegt,
+  ohne dass irgendetwas gewarnt haette. Bewusst im Config-Konstruktor
+  (einmal pro Lauf, laut CLAUDE.md die Systemgrenze) und nicht in
+  `resolve_boundary` (einmal pro Kugel pro Step). `not 0.0 <= v <= 1.0`
+  faengt NaN gleich mit, weil jeder NaN-Vergleich falsch ist.
 - Danach: 117 Tests gruen inkl. Parity gegen die neu gebaute Rust-Binary,
   ruff/format sauber, mypy unveraendert bei 1 (vorbestehend,
   `tests/game/test_level.py:104`).

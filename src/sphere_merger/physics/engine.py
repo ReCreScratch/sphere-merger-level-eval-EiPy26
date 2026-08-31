@@ -64,11 +64,26 @@ class PhysicsConfig:
             (0 = no bounce-back, 1 = no kinetic energy lost).
         boundary_restitution: Elasticity of contact with the walls. Below
             1 every bounce loses energy until the sphere settles.
+
+    All three are fractions in [0, 1]. Values above 1 would add energy on
+    every contact instead of removing it, so they are rejected here rather
+    than left to blow up a run silently; this is the config boundary, and
+    the solvers themselves stay free of per-step checks.
+
+    >>> PhysicsConfig(sphere_restitution=1.5)
+    Traceback (most recent call last):
+    ValueError: sphere_restitution must be in [0, 1], got 1.5
     """
 
     friction: float = 0.0175
     sphere_restitution: float = 0.9
     boundary_restitution: float = 0.6
+
+    def __post_init__(self) -> None:
+        for name in ("friction", "sphere_restitution", "boundary_restitution"):
+            value = getattr(self, name)
+            if not 0.0 <= value <= 1.0:
+                raise ValueError(f"{name} must be in [0, 1], got {value}")
 
 
 @deal.pre(lambda spheres, dt, boundary, config=None, collision_filter=None: dt > 0)
