@@ -31,3 +31,18 @@ def test_y_wall_bounce_reflects_velocity_and_clamps_position() -> None:
     resolve_boundary(s, FIELD, restitution=0.5)
     assert s.position.y == -4.5
     assert s.velocity.y == 1.0
+
+
+def test_penetrating_sphere_moving_away_keeps_its_velocity() -> None:
+    """A sphere pushed into a wall by `resolve_overlap` must not be flipped back in."""
+    s = Sphere(Vector2(-4.6, 0.0), Vector2(1.0, 0.0), radius=0.5, level=0)
+    resolve_boundary(s, FIELD, restitution=0.5)
+    assert s.position.x == -4.5
+    assert s.velocity.x == 1.0
+
+
+def test_penetrating_sphere_moving_into_wall_is_reflected() -> None:
+    s = Sphere(Vector2(-4.6, 0.0), Vector2(-1.0, 0.0), radius=0.5, level=0)
+    resolve_boundary(s, FIELD, restitution=0.5)
+    assert s.position.x == -4.5
+    assert s.velocity.x == 0.5

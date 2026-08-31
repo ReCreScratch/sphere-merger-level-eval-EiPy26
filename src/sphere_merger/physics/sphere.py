@@ -16,9 +16,6 @@ class Sphere:
     be a constant. Every solver therefore splits equally between both
     spheres -- overlap push, collision impulse and merge averaging alike.
 
-    Mutable on purpose: the solvers overwrite `position`/`velocity` in
-    place rather than building new spheres each step.
-
     >>> Sphere(Vector2(0.0, 0.0), Vector2(0.0, 0.0), radius=1.0, level=0).radius
     1.0
     """

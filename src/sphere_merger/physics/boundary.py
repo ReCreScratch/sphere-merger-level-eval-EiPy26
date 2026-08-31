@@ -28,12 +28,18 @@ def resolve_boundary(sphere: Sphere, boundary: Boundary, restitution: float) -> 
     """Clamp `sphere` inside `boundary`, reflecting velocity on contact.
 
     Every wall is treated the same way: if the sphere's surface would cross
-    a bound, its position is clamped to that bound and the perpendicular
-    velocity component is reflected, scaled by `restitution`.
+    a bound, its position is clamped to that bound, and the perpendicular
+    velocity component is reflected -- scaled by `restitution` -- but only
+    if it actually points at that wall.
 
-    No special "resting" case is needed. Nothing pushes a sphere back into
-    a wall between steps, so with `restitution < 1` a bounce loses energy
-    and decays to a standstill on its own.
+    That direction guard mirrors `_resolve_velocity`'s `approach_speed`
+    check and is needed for the same reason: `resolve_overlap` runs after
+    this pass and pushes spheres apart unconditionally, so a sphere wedged
+    against a wall can enter the next step penetrating it while already
+    moving away. Reflecting that would flip it back into the wall.
+
+    No special "resting" case is needed: with `restitution < 1` a bounce
+    loses energy and decays to a standstill on its own.
 
     >>> s = Sphere(Vector2(4.6, 0.0), Vector2(1.0, 0.0), radius=0.5, level=0)
     >>> b = Boundary(x_min=-5.0, x_max=5.0, y_min=-5.0, y_max=5.0)
@@ -49,17 +55,21 @@ def resolve_boundary(sphere: Sphere, boundary: Boundary, restitution: float) -> 
 
     if x - r < boundary.x_min:
         x = boundary.x_min + r
-        vx = -vx * restitution
+        if vx < 0:
+            vx = -vx * restitution
     elif x + r > boundary.x_max:
         x = boundary.x_max - r
-        vx = -vx * restitution
+        if vx > 0:
+            vx = -vx * restitution
 
     if y - r < boundary.y_min:
         y = boundary.y_min + r
-        vy = -vy * restitution
+        if vy < 0:
+            vy = -vy * restitution
     elif y + r > boundary.y_max:
         y = boundary.y_max - r
-        vy = -vy * restitution
+        if vy > 0:
+            vy = -vy * restitution
 
     sphere.position = Vector2(x, y)
     sphere.velocity = Vector2(vx, vy)

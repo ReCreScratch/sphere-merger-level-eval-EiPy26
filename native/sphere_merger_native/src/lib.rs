@@ -128,10 +128,14 @@ fn resolve_velocity(a: &mut SphereState, b: &mut SphereState, restitution: f64) 
 
 /// Every wall is treated the same way: if the sphere's surface would cross
 /// a bound, its position is clamped to that bound and the perpendicular
-/// velocity component is reflected, scaled by `restitution`. No separate
-/// "resting" case: with no continuous external force pushing a sphere
-/// back into a wall every step, a bounce that loses energy simply decays
-/// away on its own instead of needing a threshold to stop it jittering.
+/// velocity component is reflected, scaled by `restitution` -- but only if
+/// it actually points at that wall. The direction guard mirrors
+/// `resolve_velocity`'s approach-speed check: `resolve_overlap` runs after
+/// this pass and separates spheres unconditionally, so a sphere wedged
+/// against a wall can enter the next step penetrating it while already
+/// moving away, and reflecting that would flip it back into the wall.
+/// No separate "resting" case: a bounce that loses energy decays away on
+/// its own instead of needing a threshold to stop it jittering.
 fn resolve_boundary(s: &mut SphereState, boundary: &BoundaryState, restitution: f64) {
     let (mut x, mut y) = (s.pos.x, s.pos.y);
     let (mut vx, mut vy) = (s.vel.x, s.vel.y);
@@ -139,18 +143,26 @@ fn resolve_boundary(s: &mut SphereState, boundary: &BoundaryState, restitution: 
 
     if x - r < boundary.x_min {
         x = boundary.x_min + r;
-        vx = -vx * restitution;
+        if vx < 0.0 {
+            vx = -vx * restitution;
+        }
     } else if x + r > boundary.x_max {
         x = boundary.x_max - r;
-        vx = -vx * restitution;
+        if vx > 0.0 {
+            vx = -vx * restitution;
+        }
     }
 
     if y - r < boundary.y_min {
         y = boundary.y_min + r;
-        vy = -vy * restitution;
+        if vy < 0.0 {
+            vy = -vy * restitution;
+        }
     } else if y + r > boundary.y_max {
         y = boundary.y_max - r;
-        vy = -vy * restitution;
+        if vy > 0.0 {
+            vy = -vy * restitution;
+        }
     }
 
     s.pos = Vec2 { x, y };

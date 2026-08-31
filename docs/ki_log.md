@@ -554,3 +554,53 @@ abgewichen.
   vorher, weil die zwei entfernten Funktionen dokumentiert waren), alle
   8 Skripte importieren, und im gesamten `src/` gibt es keinen Verweis
   mehr auf geloeschten Code.
+- **Physik-Durchgang, Datei fuer Datei, in Abhaengigkeitsreihenfolge**
+  (`vector` -> `sphere` -> `boundary` -> `collision` -> `engine`).
+  Beim Lesen von `boundary.py` faellt auf, dass sein Docstring behauptet,
+  es brauche keinen Ruhekontakt-Sonderfall, weil "nothing pushes a sphere
+  back into a wall between steps". Das stimmt nicht: `step` laeuft in der
+  Reihenfolge Integration -> Boundary -> Kollisionen, und `resolve_overlap`
+  schiebt Positionen **bedingungslos** auseinander -- auch in eine Wand
+  hinein, nachdem der Boundary-Pass dieses Steps schon durch ist.
+  `_resolve_velocity` hat dagegen einen `approach_speed <= 0`-Guard.
+  Diese Asymmetrie erzeugt den Zustand "Kugel steckt in der Wand, bewegt
+  sich aber von ihr weg", und `resolve_boundary` drehte die
+  Geschwindigkeit dort um, statt zu pruefen, ob sie ueberhaupt zur Wand
+  zeigt.
+- Nicht behauptet, sondern nachgestellt (Kugel an der linken Wand, zweite
+  rechts daneben, beide nach rechts): `A.vx` kippt in Step 2 von `+0.491`
+  auf `-0.290`, obwohl A sich von der Wand wegbewegt. Nach dem Fix bleibt
+  es `+0.483`. Praktische Wirkung vorher war harmlos -- wegen
+  `restitution < 1` *daempfte* jeder Fehl-Flip -- also kein
+  Stabilitaetsproblem, sondern eine Ungenauigkeit mit falscher Begruendung
+  im Docstring.
+- Fix: Richtungs-Guard pro Wand (`if vx < 0` bzw. `if vx > 0`), analog zu
+  `_resolve_velocity`. **Musste doppelt landen** -- `native/.../lib.rs`
+  spiegelt `resolve_boundary` eins zu eins, und `test_native_step_parity`
+  vergleicht beide Backends. Erst nach `maturin develop --release` ist der
+  Parity-Test aussagekraeftig; vorher lief er gegen die alte Binary und
+  waere gruen geblieben, ohne die Aenderung je gesehen zu haben.
+- Danach: 117 Tests gruen inkl. Parity gegen die neu gebaute Rust-Binary,
+  ruff/format sauber, mypy unveraendert bei 1 (vorbestehend,
+  `tests/game/test_level.py:104`).
+- **Regressionstest nach dem Boundary-Fix, mit Entscheidung.** Statt zu
+  behaupten, der Guard sei folgenlos, wurden die gespeicherten
+  Shot-Sequenzen des neuesten Runs (`3b_5s_fm`, 9662 Level) mit der
+  *jetzigen* Physik nachgespielt und gegen die gespeicherten Scores
+  gehalten: **4 Abweichungen in 19324 Replays (0,021 %)**, betroffen sind
+  4 Seeds (343316186, 302150925, 814841048, 258867417). Dass der Fix die
+  Ursache ist, wurde nicht vermutet, sondern isoliert: mit der alten
+  `resolve_boundary` per Monkeypatch liefert Seed 343316186 wieder die
+  gespeicherten 36, mit der neuen 8 -- der Bruch sitzt in Schuss 4,
+  danach laeuft die Merge-Kaskade auseinander.
+- Keiner der vier Seeds ist unter den 47 kuratierten Leveln des Runs
+  (Schnittmenge programmatisch geprueft, nicht per Augenschein), die
+  Bericht-relevante Auswahl ist also unberuehrt.
+- Entscheidung: **Datensaetze bleiben, wie sie sind.** Sie stammen damit
+  aus einer Physik, die es so nicht mehr gibt -- das steht hier, statt
+  stillzuschweigen. Begruendung gegen ein Neurechnen: 0,04 % der Level
+  betroffen, und der Physik-Durchgang ist noch nicht durch. Kaeme jede
+  weitere Aenderung mit einem eigenen Neulauf, waere der Aufwand
+  vielfach; ein einziger Neulauf am Ende des Durchgangs erledigt alle
+  Aenderungen auf einmal. Wer die Daten spaeter neu erzeugt, muss mit
+  genau diesen vier Seeds rechnen.
