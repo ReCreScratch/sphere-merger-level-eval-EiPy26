@@ -66,7 +66,11 @@ seeds are tracked so a long run never plays the same level twice within a
 regime.
 
 Usage: `python scripts/long_run.py [regime ...]` -- without arguments it
-runs the nine regimes of `LONG_RUN_GRID`.
+runs the nine regimes of `LONG_RUN_GRID`. A regime whose data files
+already exist is refused (`refuse_overwrite`); `--resume` continues that
+run, `--force` replaces it. `--sphere-count N --shot-count S` plays one
+regime that isn't in `RUNS` at all, for trying out a combination nobody
+has named yet -- see `parse_cli`.
 """
 
 from __future__ import annotations
@@ -248,10 +252,20 @@ touching the percentages themselves."""
 
 
 def round_size(run: RunConfig) -> int:
-    """How many levels of `run` one round plays."""
+    """How many levels of `run` one round plays.
+
+    `SHOT_SPLIT`/`FULL_MERGE_SPLIT` only cover the shot counts and names
+    the nine-regime grid and the four fm-regimes actually use -- an
+    ad-hoc regime from `--sphere-count`/`--shot-count` (`parse_cli`) falls
+    outside both, and always plays alone in its own round rather than
+    sharing one with a regime it can't be weighed against, so there is
+    no split to look up: the whole per-sphere-count budget is its round.
+    """
     if run.full_mergeable:
         return max(1, round(FULL_MERGE_LEVELS * FULL_MERGE_SPLIT[run.name]))
-    return max(1, round(LEVELS_PER_SPHERE_COUNT * SHOT_SPLIT[run.shot_count]))
+    if run.shot_count in SHOT_SPLIT:
+        return max(1, round(LEVELS_PER_SPHERE_COUNT * SHOT_SPLIT[run.shot_count]))
+    return LEVELS_PER_SPHERE_COUNT
 
 
 def meta_for(run: RunConfig) -> dict[str, object]:
@@ -593,10 +607,83 @@ def main(runs: tuple[RunConfig, ...], resume: bool = False) -> None:
         )
 
 
+def refuse_overwrite(runs: tuple[RunConfig, ...]) -> None:
+    """Stop before touching anything if `runs` already have data files.
+
+    Finalising replaces a regime's files wholesale (see `save_run`), and
+    that happens on every exit path including Ctrl-C -- so a run that is
+    started to "just have a look" and stopped after a minute leaves the
+    previous run's dataset overwritten by a handful of levels. Since that
+    is exactly what the documented example command invites, the loss is
+    made impossible rather than merely warned about.
+
+    Raises:
+        SystemExit: if any target file exists, naming them and the two
+            ways forward.
+    """
+    existing = [
+        path for run in runs for path in (run.interesting_path, run.shrunk_path) if path.exists()
+    ]
+    if not existing:
+        return
+    names = "\n".join(f"  {path}" for path in existing)
+    raise SystemExit(
+        f"Abbruch: dieser Lauf wuerde vorhandene Daten ersetzen:\n{names}\n"
+        "--resume setzt den vorhandenen Lauf fort, --force ersetzt ihn."
+    )
+
+
+def parse_cli(argv: list[str]) -> tuple[tuple[RunConfig, ...], bool, bool]:
+    """Regimes to run, plus the `--resume`/`--force` flags, from `argv`.
+
+    Regimes come from `RUNS` by name (positional arguments; all of
+    `LONG_RUN_GRID` if none are given), or as one ad-hoc regime via
+    `--sphere-count`/`--shot-count` for a combination nobody has added to
+    `RUNS` yet -- the two ways are mutually exclusive, since an ad-hoc
+    regime has no split to share a round with a named one by (see
+    `round_size`).
+
+    Raises:
+        SystemExit: if the two ways are mixed, if only one of
+            `--sphere-count`/`--shot-count` is given, or (via
+            `select_runs`) if a positional name isn't in `RUNS`.
+    """
+    resuming = "--resume" in argv
+    forcing = "--force" in argv
+    rest = [a for a in argv if a not in ("--resume", "--force")]
+
+    sphere_count: int | None = None
+    shot_count: int | None = None
+    positional: list[str] = []
+    i = 0
+    while i < len(rest):
+        if rest[i] in ("--sphere-count", "--shot-count") and i + 1 >= len(rest):
+            raise SystemExit(f"{rest[i]} braucht einen Wert.")
+        if rest[i] == "--sphere-count":
+            sphere_count, i = int(rest[i + 1]), i + 2
+        elif rest[i] == "--shot-count":
+            shot_count, i = int(rest[i + 1]), i + 2
+        else:
+            positional.append(rest[i])
+            i += 1
+
+    if sphere_count is not None or shot_count is not None:
+        if sphere_count is None or shot_count is None:
+            raise SystemExit("--sphere-count und --shot-count muessen zusammen angegeben werden.")
+        if positional:
+            raise SystemExit(
+                "--sphere-count/--shot-count lassen sich nicht mit benannten Regimen kombinieren."
+            )
+        return (RunConfig(sphere_count=sphere_count, shot_count=shot_count),), resuming, forcing
+
+    selected = select_runs(positional) if positional else LONG_RUN_GRID
+    return selected, resuming, forcing
+
+
 if __name__ == "__main__":
-    args = [a for a in sys.argv[1:] if a != "--resume"]
-    resuming = "--resume" in sys.argv[1:]
-    selected = select_runs(args) if args else LONG_RUN_GRID
+    selected, resuming, forcing = parse_cli(sys.argv[1:])
+    if not (resuming or forcing):
+        refuse_overwrite(selected)
     if STOP_FILE.exists():
         STOP_FILE.unlink()
     signal.signal(signal.SIGINT, _request_stop)

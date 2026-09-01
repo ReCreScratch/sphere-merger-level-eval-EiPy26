@@ -5,6 +5,7 @@ description = "Level Evaluation - Sphere Merger"
 requires-python = ">=3.11"
 dependencies = [
     "pygame",
+    "deal",
 ]
 
 [project.optional-dependencies]
@@ -14,7 +15,6 @@ dev = [
     "mypy",
     "ruff",
     "interrogate",
-    "deal",
     "maturin",
 ]
 
