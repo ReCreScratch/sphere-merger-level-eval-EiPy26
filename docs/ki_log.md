@@ -629,3 +629,30 @@ Level endet, das nie ein Lauf gesehen hat.
 Gegenprobe statt Behauptung: fuer alle 14 Regime x 2 Seeds wurden
 Startkugeln, Schuss-Queue und Zielpunktzahl vor und nach dem Umbau
 gehasht -- identisch (`59847dd1...`). Tests/ruff/mypy unveraendert gruen.
+
+## 2026-09-02
+
+**Ad-hoc-Regime, Ueberschreib-Schutz, zwei neue Play-Skripte.**
+`long_run.py`/`play_seed.py` kannten nur Regime aus `RUNS`; wer eine neue
+Kugel-/Schusskombination ausprobieren wollte, musste vorher die Liste
+aendern. Beide Skripte nehmen jetzt `--sphere-count`/`--shot-count` als
+Alternative zum Regimenamen. Nebenbei aufgefallen: `long_run.py`
+finalisiert auf jedem Ausstiegspfad, auch bei Ctrl-C, und ersetzt dabei
+die Zieldatei vollstaendig -- der in README/Anhang A dokumentierte
+Beispielbefehl (`long_run.py 8b`) haette also das vorhandene
+`8b`-Ergebnis mit ein paar Leveln ueberschrieben, wenn jemand ihn kurz
+zum Ausprobieren startet und wieder abbricht. `refuse_overwrite` bricht
+jetzt vorher ab, sofern nicht `--resume` oder das neue `--force` gesetzt
+ist.
+
+Zwei neue Skripte fuer Dinge, die vorher keinen Einstiegspunkt hatten:
+`play_baseline.py` (die drei Level aus `BASELINE_LEVELS`, bisher von
+keinem Skript importiert) und `play_curated.py` (vier handverlesene
+Full-Merge-Seeds, je einer pro `full_mergeable`-Regime -- ausgewaehlt
+anhand der lokalen, nicht versionierten `interesting_levels_*_fm.json`,
+aber im Skript nur als (Regime, Seed) hinterlegt, sodass niemand diese
+Rohdaten braucht, um die Level zu sehen).
+
+Anhang A im Bericht war nach den ersten Ergaenzungen ein erklaerender
+Absatz ueber Regime-Namen, RUNS und die neuen Flags -- auf Wunsch wieder
+auf reine Befehlsliste zurueckgebaut, keine Erklaerung mehr im Anhang.
