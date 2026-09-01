@@ -23,8 +23,10 @@ pip install -e ".[dev]"
 ## Spielen und Läufe starten
 
 ```
-python scripts/play_seed.py 44 6b_3s   # ein Level selbst spielen
-python scripts/long_run.py 8b          # Batch-Lauf eines Regimes
+python scripts/play_seed.py 44 6b_3s        # ein Level selbst spielen
+python scripts/play_baseline.py lookahead_trap  # eines der 3 Baseline-Level (6.1)
+python scripts/play_curated.py                  # ein kuratiertes Full-Merge-Level (4.4)
+python scripts/long_run.py 8b               # Batch-Lauf eines Regimes
 ```
 
 Beide Skripte adressieren ein Level über **Regime + Seed**. Ein Regime ist die
@@ -36,11 +38,26 @@ die konstruierten, vollständig verschmelzbaren Level.
 
 Die gültigen Namen stehen in `RUNS` (`game/interesting_levels.py`), zusammen mit
 Feldgröße, Spawn-Position, Schussgeschwindigkeit und Zielpunktzahl -- alles, was
-ein Seed sonst noch braucht. Freie Parameter nimmt keines der Skripte: jedes
-Regime besitzt sein eigenes Dateipaar in `data/`, und Läufe mit anderer Kugel-
-oder Schusszahl sind untereinander ohnehin nicht vergleichbar. `play_seed.py`
-ohne Argumente spielt Seed 44 in `6b_3s`; `long_run.py` ohne Argumente rechnet
-alle neun Zufallsregime und **ersetzt dabei deren vorhandene Daten**.
+ein Seed sonst noch braucht. `play_seed.py` ohne Argumente spielt Seed 44 in
+`6b_3s`; `long_run.py` ohne Argumente würde alle neun Zufallsregime rechnen,
+bricht aber ab, sobald eines davon schon eine Datendatei hat -- `--resume`
+setzt einen unterbrochenen Lauf fort, `--force` ersetzt die vorhandenen Daten
+bewusst.
+
+Ein Regime, das noch nicht in `RUNS` steht, lässt sich mit
+`--sphere-count`/`--shot-count` statt eines Namens ausprobieren:
+
+```
+python scripts/play_seed.py 44 --sphere-count 7 --shot-count 5
+python scripts/long_run.py --sphere-count 7 --shot-count 5
+```
+
+Ein so erzeugtes Regime bekommt automatisch denselben Namen, den es auch als
+fester Eintrag in `RUNS` hätte (`7b_5s`), und schreibt seine Daten unter genau
+diesem Namen nach `data/` -- nur eben ohne dass jemand die Zeile in `RUNS`
+ergänzt hat. Dauerhaft brauchbar wird ein Regime erst mit einem solchen
+Eintrag: erst dann kennen `build_dashboard_data.py` und die `browse_*`-Skripte
+es überhaupt.
 
 ## Tests & Checks
 
