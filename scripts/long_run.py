@@ -96,24 +96,21 @@ from sphere_merger.agents.runner import (
     shrink_to_used_spheres,
 )
 from sphere_merger.game.checkpoint import Checkpoint
-from sphere_merger.game.interesting_levels import RUNS, RunConfig, select_runs
-from sphere_merger.game.level import (
-    LevelDefinition,
-    generate_full_mergeable_level,
-    generate_random_level,
-    merge_popcount,
+from sphere_merger.game.interesting_levels import (
+    FIELD,
+    LEVEL_RANGE,
+    RUNS,
+    SHOT_SPEED,
+    SPAWN_MARGIN,
+    TARGET_SCORE,
+    RunConfig,
+    build_level,
+    select_runs,
 )
-from sphere_merger.physics.boundary import Boundary
+from sphere_merger.game.level import LevelDefinition, merge_popcount
 from sphere_merger.physics.engine import native_backend
-from sphere_merger.physics.vector import Vector2
 
-FIELD = Boundary(x_min=-6.0, x_max=6.0, y_min=-6.0, y_max=6.0)
-SPAWN_MARGIN = 1.0
-SPAWN = Vector2(FIELD.x_min + SPAWN_MARGIN, FIELD.y_min + SPAWN_MARGIN)
-SHOT_SPEED = 25.0
 RANDOM_SAMPLE_COUNT = 20
-TARGET_SCORE = 999
-LEVEL_RANGE = (0, 2)
 
 SPHERE_COUNTS = (5, 8, 10)
 LEVELS_PER_SPHERE_COUNT = 300
@@ -255,20 +252,6 @@ def round_size(run: RunConfig) -> int:
     if run.full_mergeable:
         return max(1, round(FULL_MERGE_LEVELS * FULL_MERGE_SPLIT[run.name]))
     return max(1, round(LEVELS_PER_SPHERE_COUNT * SHOT_SPLIT[run.shot_count]))
-
-
-def build_level(seed: int, run: RunConfig) -> LevelDefinition:
-    """The level `seed` denotes under `run`'s parameters."""
-    generator = generate_full_mergeable_level if run.full_mergeable else generate_random_level
-    return generator(
-        seed=seed,
-        boundary=FIELD,
-        spawn_position=SPAWN,
-        target_score=TARGET_SCORE,
-        initial_sphere_count=run.sphere_count,
-        shot_count=run.shot_count,
-        level_range=LEVEL_RANGE,
-    )
 
 
 def meta_for(run: RunConfig) -> dict[str, object]:

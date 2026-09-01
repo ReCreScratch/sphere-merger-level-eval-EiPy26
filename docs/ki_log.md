@@ -611,3 +611,21 @@ abgewichen.
   vielfach; ein einziger Neulauf am Ende des Durchgangs erledigt alle
   Aenderungen auf einmal. Wer die Daten spaeter neu erzeugt, muss mit
   genau diesen vier Seeds rechnen.
+
+## 2026-09-01
+
+**Level-Parameter an einer Stelle, `play_seed.py` mit Argumenten.**
+`scripts/play_seed.py` hatte Seed *und* Generierungsparameter hart
+verdrahtet (`SEED = 44`, 6 Kugeln, 3 Schuesse) -- eine zweite Kopie
+dessen, was `long_run.py` fuer seine Laeufe benutzt, die still davon
+abdriften konnte. Feld, Spawn-Rand, Schussgeschwindigkeit, Zielpunktzahl
+und Level-Range liegen jetzt neben `RUNS` in
+`game/interesting_levels.py`, zusammen mit `build_level(seed, run)`;
+beide Skripte importieren sie. `play_seed.py` nimmt Seed und Regime als
+Kommandozeilenargumente (`python scripts/play_seed.py 44 6b_3s`), das
+Regime per `choices` aus `RUNS`, damit ein Tippfehler nicht in einem
+Level endet, das nie ein Lauf gesehen hat.
+
+Gegenprobe statt Behauptung: fuer alle 14 Regime x 2 Seeds wurden
+Startkugeln, Schuss-Queue und Zielpunktzahl vor und nach dem Umbau
+gehasht -- identisch (`59847dd1...`). Tests/ruff/mypy unveraendert gruen.

@@ -21,8 +21,26 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from sphere_merger.game.level import (
+    LevelDefinition,
+    generate_full_mergeable_level,
+    generate_random_level,
+)
+from sphere_merger.physics.boundary import Boundary
+from sphere_merger.physics.vector import Vector2
+
 DEFAULT_DB_PATH = Path(__file__).resolve().parents[3] / "data" / "interesting_levels.json"
 DATA_DIR = Path(__file__).resolve().parents[3] / "data"
+
+FIELD = Boundary(x_min=-6.0, x_max=6.0, y_min=-6.0, y_max=6.0)
+SPAWN_MARGIN = 1.0
+SPAWN = Vector2(FIELD.x_min + SPAWN_MARGIN, FIELD.y_min + SPAWN_MARGIN)
+SHOT_SPEED = 25.0
+TARGET_SCORE = 999
+LEVEL_RANGE = (0, 2)
+"""Everything a level needs beyond its `RunConfig`, in the same place as
+`RUNS`: what a seed means depends on all of it, so a script keeping its
+own copy would silently describe a different level under the same seed."""
 
 
 @dataclass(frozen=True)
@@ -109,6 +127,25 @@ def select_runs(names: Sequence[str]) -> tuple[RunConfig, ...]:
     if unknown:
         raise KeyError(f"unbekannte Runs: {', '.join(unknown)} (bekannt: {', '.join(known)})")
     return tuple(known[name] for name in names)
+
+
+def build_level(seed: int, run: RunConfig) -> LevelDefinition:
+    """The level `seed` denotes under `run`, with the shared parameters above.
+
+    The single definition of "which level is seed 44 of regime 6b_3s" --
+    used by the batch producer and by the interactive `play_seed.py`, so
+    what a run recorded and what a human replays cannot drift apart.
+    """
+    generator = generate_full_mergeable_level if run.full_mergeable else generate_random_level
+    return generator(
+        seed=seed,
+        boundary=FIELD,
+        spawn_position=SPAWN,
+        target_score=TARGET_SCORE,
+        initial_sphere_count=run.sphere_count,
+        shot_count=run.shot_count,
+        level_range=LEVEL_RANGE,
+    )
 
 
 def load_run(path: Path = DEFAULT_DB_PATH) -> dict[str, Any]:
