@@ -20,6 +20,28 @@ py -3.11 -m venv .venv
 pip install -e ".[dev]"
 ```
 
+## Spielen und Läufe starten
+
+```
+python scripts/play_seed.py 44 6b_3s   # ein Level selbst spielen
+python scripts/long_run.py 8b          # Batch-Lauf eines Regimes
+```
+
+Beide Skripte adressieren ein Level über **Regime + Seed**. Ein Regime ist die
+Kombination aus Kugelanzahl und Länge der Schuss-Queue und heißt
+`<Kugeln>b_<Schüsse>s` -- `6b_3s` sind also 6 Startkugeln und 3 Schüsse. Die
+beiden ältesten Läufe stammen aus der Zeit mit fest zwei Schüssen und heißen
+darum nur `8b` und `5b` (8 bzw. 5 Kugeln, 2 Schüsse); die Namen auf `_fm` sind
+die konstruierten, vollständig verschmelzbaren Level.
+
+Die gültigen Namen stehen in `RUNS` (`game/interesting_levels.py`), zusammen mit
+Feldgröße, Spawn-Position, Schussgeschwindigkeit und Zielpunktzahl -- alles, was
+ein Seed sonst noch braucht. Freie Parameter nimmt keines der Skripte: jedes
+Regime besitzt sein eigenes Dateipaar in `data/`, und Läufe mit anderer Kugel-
+oder Schusszahl sind untereinander ohnehin nicht vergleichbar. `play_seed.py`
+ohne Argumente spielt Seed 44 in `6b_3s`; `long_run.py` ohne Argumente rechnet
+alle neun Zufallsregime und **ersetzt dabei deren vorhandene Daten**.
+
 ## Tests & Checks
 
 ```
